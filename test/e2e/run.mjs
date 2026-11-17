@@ -2,7 +2,8 @@
 // `node test/e2e/run.mjs <lane>` runs that lane's cases (exit 0 pass or skipped, 1 failure, 2 usage); the lane test
 // files import CASES and run them under node:test. Tasks 17-18 add their lanes to CASES.
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,6 +23,8 @@ const { LANES } = await import(`${SCRIPTS}/lanes/index.mjs`);
 const { pack } = await import(`${SCRIPTS}/pack.mjs`);
 const { verify } = await import(`${SCRIPTS}/verify/verify.mjs`);
 const { makeWebGame } = await import('../fixtures/make-web-game.mjs');
+const { makeAnimSwf } = await import('../fixtures/make-swf.mjs');
+const { ensureTool } = await import(`${SCRIPTS}/setup.mjs`);
 
 export const skipReason = () => {
   const b = findBrowser();
@@ -30,20 +33,39 @@ export const skipReason = () => {
   return false;
 };
 
+// R41: runtime tools (Ruffle, js-dos) come from one cache shared by every e2e run on this machine, so each downloads once.
+// Ports and every other temp dir stay per-run; the user's real cache is never touched.
+export const TOOL_CACHE = path.join(tmpdir(), 'pag-e2e-tools');
+export async function withToolCache(fn) {
+  const prev = process.env.PAG_CACHE;
+  process.env.PAG_CACHE = TOOL_CACHE;
+  try { return await fn(); } finally { process.env.PAG_CACHE = prev; }
+}
+// Installs the tool into the shared cache (sha-verified); an offline machine skips the case ({skip: true}, see main() and the lane tests).
+export async function e2eTool(name) {
+  try { return await withToolCache(() => ensureTool(name)); } catch (e) {
+    throw Object.assign(new Error(`could not get the ${name} runtime (offline?): ${e.message}; e2e case skipped`), { skip: true });
+  }
+}
+
 let n = 0;
 const failing = (r) => JSON.stringify(r.checks.filter((c) => c.status !== 'pass'), null, 1);
 
 // fixture(dir) makes the game install and returns its folder; the lane builds it. Returns {portDir, distDir, built, survey, report}.
-export async function pipeline(laneId, fixture, { soakSec = 5 } = {}) {
+export async function pipeline(laneId, fixture, { soakSec = 5, mode = 'bundled', tools = [], query = '' } = {}) {
+  for (const t of tools) await e2eTool(t);
+  return pipelineIn(laneId, fixture, { soakSec, mode, query });
+}
+async function pipelineIn(laneId, fixture, { soakSec, mode, query }) {
   const dir = path.join(base, `case-${++n}`);
   const gameDir = fixture(path.join(dir, 'install'));
   const s = await survey(gameDir);
   const portDir = path.join(dir, 'port');
   await newPort({ gameDir, outDir: portDir, lane: laneId });
-  const built = await LANES[laneId].build(portDir);
-  const { distDir } = await pack(portDir, { mode: 'bundled' });
+  // build and pack look the tool up in PAG_CACHE
+  const { built, distDir } = await withToolCache(async () => ({ built: await LANES[laneId].build(portDir), ...(await pack(portDir, { mode })) }));
   const t0 = Date.now();
-  const report = await verify(distDir, { runner: 'cdp', soakSec });
+  const report = await verify(distDir, { runner: 'cdp', soakSec, query });
   console.log(`# ${laneId}: verify ${report.status} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
   return { portDir, distDir, built, survey: s, report };
 }
@@ -78,12 +100,51 @@ async function redirected() {
   assert.match(readFileSync(path.join(r.portDir, 'build', 'game', 'index.html'), 'utf8'), /http-equiv="refresh"/);
 }
 
+// ---- rt-ruffle (BYO): the SWF is imported into OPFS from the fixture mount; dist must hold no game bytes.
+const distFiles = (d) => readdirSync(d, { recursive: true, withFileTypes: true }).filter((e) => e.isFile()).map((e) => path.join(e.parentPath ?? e.path, e.name));
+const swfInstall = (extra = {}) => (dir) => {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(path.join(dir, 'anim.swf'), makeAnimSwf());
+  for (const [name, size] of Object.entries(extra)) writeFileSync(path.join(dir, name), randomBytes(size));
+  return dir;
+};
+
+async function ruffleByo() {
+  const r = await pipeline('rt-ruffle', swfInstall(), { mode: 'byo', tools: ['ruffle'] });
+  assert.equal(r.report.status, 'pass', failing(r.report));
+  assert.equal(r.built.verdict, 'GO');
+  const swf = makeAnimSwf();
+  const files = distFiles(r.distDir);
+  assert.ok(files.some((f) => /[\\/]runtime[\\/]rt-ruffle-[0-9a-f]{8}[\\/]ruffle\.js$/.test(f)), 'ruffle.js is in the hashed runtime folder');
+  for (const f of files) {
+    const b = readFileSync(f);
+    assert.equal(b.includes(swf.subarray(0, 64)) || b.includes(swf.subarray(100, 164)), false, `game bytes in dist: ${f}`);
+  }
+  assert.deepEqual(readdirSync(path.join(r.distDir, 'game')), ['manifest.json']);
+}
+
+// Review Focus 5: an import interrupted after one file resumes; files already marked .done are not fetched again.
+async function ruffleResume() {
+  const MiB = 1024 * 1024;
+  const r = await pipeline('rt-ruffle', swfInstall({ 'pad1.bin': MiB, 'pad2.bin': MiB }), { mode: 'byo', tools: ['ruffle'], query: 'verify_interrupt_after=1' });
+  assert.equal(r.report.status, 'pass', failing(r.report));
+  assert.equal(r.report.runs[0].measures.shell.state, 'running');
+  const gets = {};
+  for (const q of r.report.runs[0].requests) if (q.method === 'GET' && q.url.startsWith('/__fixture/')) gets[q.url] = (gets[q.url] ?? 0) + 1;
+  assert.equal(Object.keys(gets).length > 0, true, `no fixture GETs recorded: ${JSON.stringify(r.report.runs[0].requests.map((q) => q.url))}`);
+  for (const [u, c] of Object.entries(gets)) assert.ok(c <= 1, `${u} fetched ${c} times`);
+}
+
 export const CASES = {
   'web-extract': [
     { name: 'web-extract NW.js fixture passes verify', run: () => passes('nwjs') },
     { name: 'web-extract Electron fixture passes verify', run: () => passes('electron') },
     { name: 'web-extract fixture with mixed-case refs passes', run: mixedCase },
     { name: 'web-extract redirected main (start.html) passes verify incl. input', run: redirected },
+  ],
+  'rt-ruffle': [
+    { name: 'rt-ruffle BYO fixture passes verify with zero game bytes in dist', run: ruffleByo },
+    { name: 'rt-ruffle import resumes after interrupted import', run: ruffleResume },
   ],
 };
 
@@ -94,7 +155,8 @@ async function main(argv) {
   if (why) { console.log(`SKIP ${argv[0]}: ${why}`); return 0; }
   let failed = 0;
   for (const c of cases) {
-    try { await c.run(); console.log(`ok   ${c.name}`); } catch (e) { failed++; console.log(`FAIL ${c.name}\n${e.stack ?? e}`); }
+    try { await c.run(); console.log(`ok   ${c.name}`); } catch (e) {
+      if (e?.skip) { console.log(`SKIP ${c.name}: ${e.message}`); continue; } failed++; console.log(`FAIL ${c.name}\n${e.stack ?? e}`); }
   }
   return failed ? 1 : 0;
 }

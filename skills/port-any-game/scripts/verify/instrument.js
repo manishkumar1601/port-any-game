@@ -1,6 +1,6 @@
 // Injected by pag verify into every frame before any page script (CDP Page.addScriptToEvaluateOnNewDocument, or
 // Playwright addInitScript). Plain script, not a module. Exposes window.__pagVerify:
-//   sample()  largest visible canvas (same-origin iframes included) downscaled to 64x48 RGBA, or null
+//   sample()  largest visible canvas (same-origin iframes and open shadow roots included) downscaled to 64x48 RGBA, or null
 //   audio()   {contexts: AudioContext states, rms: loudest RMS 0..1 across tapped contexts, or null}
 //   pad(on)   press/release button 0 and push the left stick of the fake standard gamepad
 //   heap()    performance.memory.usedJSHeapSize (Chromium), or null
@@ -89,6 +89,8 @@
     for (const f of doc.querySelectorAll('iframe, frame')) {
       try { if (f.contentDocument) collect(f.contentDocument, out); } catch { /* cross-origin frame */ }
     }
+    // Open shadow roots too (Ruffle draws inside <ruffle-player>); closed ones are not reachable.
+    for (const el of doc.querySelectorAll('*')) if (el.shadowRoot) collect(el.shadowRoot, out);
     return out;
   };
   V.sample = () => {

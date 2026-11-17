@@ -84,8 +84,8 @@ export function headersFor(shell) {
   ].join('\n');
 }
 
-function shellJson(port, lane, mode, runtimeDir) {
-  const c = lane.shell?.(port) ?? {};
+function shellJson(port, lane, mode, runtimeDir, portDir) {
+  const c = lane.shell?.(port, { portDir }) ?? {};
   const merged = (k) => ({ ...DEFAULTS[k], ...c[k] });
   return {
     schema: 1,
@@ -170,7 +170,7 @@ function licenseText(e, dir) {
 
 const copyTo = (from, to) => { mkdirSync(path.dirname(to), { recursive: true }); copyFileSync(from, to); };
 
-function writeDist(out, { port, lane, mode, tool, runtime, files, source }) {
+function writeDist(out, { port, lane, mode, tool, runtime, files, source, portDir }) {
   mkdirSync(path.join(out, 'shell'), { recursive: true });
   for (const f of readdirSync(SHELL_DIR)) copyFileSync(path.join(SHELL_DIR, f), f === 'index.html' ? path.join(out, f) : path.join(out, 'shell', f));
   for (const [rel, abs] of runtime.files) copyTo(abs, path.join(out, 'runtime', runtime.dir, ...rel.split('/')));
@@ -189,7 +189,7 @@ function writeDist(out, { port, lane, mode, tool, runtime, files, source }) {
   if (mode !== 'byo') for (const f of files) copyTo(f.abs, path.join(out, 'game', ...f.path.split('/')));
   writeFileSync(path.join(out, 'game', 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 
-  const shell = shellJson(port, lane, mode, runtime.dir);
+  const shell = shellJson(port, lane, mode, runtime.dir, portDir);
   writeFileSync(path.join(out, 'shell.json'), `${JSON.stringify(shell, null, 2)}\n`);
   writeFileSync(path.join(out, '_headers'), headersFor(shell));
   writeFileSync(path.join(out, 'robots.txt'), 'User-agent: *\nDisallow: /\n');
@@ -237,7 +237,7 @@ export async function pack(portDir, { mode, laneModule, lock, warn = () => {} } 
   rmrf(old);
   let shell;
   try {
-    shell = writeDist(tmp, { port, lane, mode, tool, runtime, files, source });
+    shell = writeDist(tmp, { port, lane, mode, tool, runtime, files, source, portDir: dir });
     if (exists(dist)) renameSync(dist, old);
     renameSync(tmp, dist);
   } catch (e) {
