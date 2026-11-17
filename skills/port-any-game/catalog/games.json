@@ -1,0 +1,697 @@
+{
+ "schema": "port-any-game/catalog@1",
+ "games": [
+  {
+   "id": "caesar3",
+   "title": "Caesar III",
+   "ids": {
+    "steam": [
+     "517790"
+    ]
+   },
+   "signatures": [
+    {
+     "path": "(^|/)c3\\.emp$"
+    }
+   ],
+   "ports": [
+    {
+     "name": "Augustus",
+     "kind": "reimpl-web",
+     "url": "https://augustus.josecadete.net/play/",
+     "license": "AGPL-3.0",
+     "data_files": [
+      "Caesar 3 installation folder"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17"
+    }
+   ]
+  },
+  {
+   "id": "pharaoh",
+   "title": "Pharaoh",
+   "ids": {
+    "steam": [
+     "564530"
+    ]
+   },
+   "signatures": [
+    {
+     "path": "(^|/)pharaoh\\.exe$"
+    }
+   ],
+   "ports": [
+    {
+     "name": "Akhenaten",
+     "kind": "reimpl-web",
+     "url": "https://github.com/dalerank/Akhenaten",
+     "license": "AGPL-3.0",
+     "data_files": [
+      "Original Pharaoh/Cleopatra files"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17",
+     "notes": "Hosted play page returned 404 on 2026-11-17; link is the source repo."
+    }
+   ]
+  },
+  {
+   "id": "homm2",
+   "title": "Heroes of Might and Magic II",
+   "ids": {},
+   "signatures": [
+    {
+     "path": "(^|/)heroes2\\.agg$"
+    }
+   ],
+   "ports": [
+    {
+     "name": "fheroes2 web",
+     "kind": "byo-web",
+     "url": "https://buildenginegames.online/homm2webgit/index.html",
+     "license": "GPL-2.0",
+     "data_files": [
+      "DATA/ (HEROES2.AGG)",
+      "MAPS/",
+      "MUSIC/",
+      "optional ANIM/"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17",
+     "notes": "Third-party build; threaded builds need COOP/COEP."
+    }
+   ]
+  },
+  {
+   "id": "diablo",
+   "title": "Diablo",
+   "ids": {},
+   "signatures": [
+    {
+     "path": "(^|/)diabdat\\.mpq$"
+    }
+   ],
+   "ports": [
+    {
+     "name": "DiabloWeb",
+     "kind": "byo-web",
+     "url": "https://d07riv.github.io/diabloweb/",
+     "license": "Unlicense (engine fork only; does not license Blizzard code)",
+     "data_files": [
+      "DIABDAT.MPQ"
+     ],
+     "legal_risk": "medium",
+     "verified_at": "2026-11-17",
+     "notes": "Unmaintained since 2022-05 but works."
+    },
+    {
+     "name": "Diablo Web (JohnImril)",
+     "kind": "byo-web",
+     "url": "https://johnimril.github.io/diablo_web/",
+     "license": "none detected",
+     "data_files": [
+      "DIABDAT.MPQ"
+     ],
+     "legal_risk": "medium",
+     "verified_at": "2026-11-17",
+     "notes": "Maintained fork; no licence file."
+    }
+   ]
+  },
+  {
+   "id": "jazz2",
+   "title": "Jazz Jackrabbit 2",
+   "ids": {},
+   "signatures": [
+    {
+     "path": "(^|/)anims\\.j2a$"
+    }
+   ],
+   "ports": [
+    {
+     "name": "Jazz2 Resurrection",
+     "kind": "reimpl-web",
+     "url": "https://de4th.dev/jazz2/wasm/",
+     "license": "GPL-3.0",
+     "data_files": [
+      "Original Jazz Jackrabbit 2 directory"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17"
+    }
+   ]
+  },
+  {
+   "id": "jazz1",
+   "title": "Jazz Jackrabbit",
+   "ids": {},
+   "signatures": [],
+   "ports": [
+    {
+     "name": "OpenJazz web",
+     "kind": "reimpl-web",
+     "url": "https://openjazz.github.io",
+     "license": "GPL-2.0-or-later",
+     "data_files": [
+      "Files from one of the original games"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17"
+    }
+   ]
+  },
+  {
+   "id": "atlantis",
+   "title": "Atlantis: The Lost Tales",
+   "ids": {},
+   "signatures": [],
+   "ports": [
+    {
+     "name": "Atlantis Native",
+     "kind": "reimpl-web",
+     "url": "https://ripleyxlr8.github.io/atlantis-native/",
+     "license": "GPL-3.0-or-later",
+     "data_files": [
+      "Own game copy (folder or disc image)"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17"
+    }
+   ]
+  },
+  {
+   "id": "pvz",
+   "title": "Plants vs. Zombies GOTY Edition",
+   "ids": {
+    "steam": [
+     "3590"
+    ]
+   },
+   "signatures": [
+    {
+     "path": "(^|/)main\\.pak$"
+    }
+   ],
+   "ports": [
+    {
+     "name": "PvZ-Portable",
+     "kind": "reimpl-web",
+     "url": "https://wszqkzqk.github.io/PvZ-Portable/pvz-portable.html",
+     "license": "LGPL-3.0",
+     "data_files": [
+      "main.pak",
+      "properties/"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17"
+    }
+   ]
+  },
+  {
+   "id": "generals-zh",
+   "title": "Command & Conquer: Generals - Zero Hour",
+   "ids": {},
+   "signatures": [
+    {
+     "path": "(^|/)inizh\\.big$"
+    }
+   ],
+   "ports": [
+    {
+     "name": "GeneralsX Web",
+     "kind": "byo-web",
+     "url": "https://generals.wasm.ltd",
+     "license": "GPL-3.0 engine, MIT page",
+     "data_files": [
+      "Installed copy of the game"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17"
+    }
+   ]
+  },
+  {
+   "id": "fatal-racing",
+   "title": "Whiplash / Fatal Racing",
+   "ids": {},
+   "signatures": [],
+   "ports": [
+    {
+     "name": "ROLLER",
+     "kind": "reimpl-web",
+     "url": "https://play.fatal.racing",
+     "license": "GPL-3.0",
+     "data_files": [
+      "Disc image of a retail copy for the full game"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17",
+     "notes": "Freeware demo is bundled."
+    }
+   ]
+  },
+  {
+   "id": "quake",
+   "title": "Quake",
+   "ids": {
+    "steam": [
+     "2310"
+    ]
+   },
+   "signatures": [
+    {
+     "path": "(^|/)id1/pak0\\.pak$"
+    }
+   ],
+   "engines": [
+    "idtech-quake"
+   ],
+   "ports": [
+    {
+     "name": "Qwasm",
+     "kind": "byo-web",
+     "url": "https://gmh-code.github.io/qwasm/",
+     "license": "GPL-2.0 (id Quake source)",
+     "data_files": [
+      "pak0.pak (shareware) / pak1.pak (full), lowercase names"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17"
+    }
+   ]
+  },
+  {
+   "id": "quake2",
+   "title": "Quake II",
+   "ids": {
+    "steam": [
+     "2320"
+    ]
+   },
+   "signatures": [
+    {
+     "path": "(^|/)baseq2/pak0\\.pak$"
+    }
+   ],
+   "engines": [
+    "idtech-quake"
+   ],
+   "ports": [
+    {
+     "name": "Qwasm2",
+     "kind": "byo-web",
+     "url": "https://gmh-code.github.io/qwasm2/",
+     "license": "Multi-licence (Yamagi)",
+     "data_files": [
+      "pak0.pak"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17"
+    }
+   ]
+  },
+  {
+   "id": "quake3",
+   "title": "Quake III Arena",
+   "ids": {
+    "steam": [
+     "2200"
+    ]
+   },
+   "signatures": [
+    {
+     "path": "(^|/)baseq3/pak0\\.pk3$"
+    }
+   ],
+   "ports": [
+    {
+     "name": "Q3JS",
+     "kind": "byo-web",
+     "url": "https://q3js.com",
+     "license": "Mixed (multi-licence notice)",
+     "data_files": [
+      "Own PK3 files"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17"
+    }
+   ]
+  },
+  {
+   "id": "doom",
+   "title": "DOOM",
+   "ids": {
+    "steam": [
+     "2280"
+    ]
+   },
+   "signatures": [
+    {
+     "path": "(^|/)doom\\.wad$"
+    }
+   ],
+   "engines": [
+    "idtech-doom"
+   ],
+   "ports": [
+    {
+     "name": "Dwasm",
+     "kind": "byo-web",
+     "url": "https://gmh-code.github.io/dwasm/",
+     "license": "GPL-2.0",
+     "data_files": [
+      "An IWAD (doom.wad / doom2.wad); Freedoom also works"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17"
+    }
+   ]
+  },
+  {
+   "id": "doom2",
+   "title": "DOOM II",
+   "ids": {
+    "steam": [
+     "2300"
+    ]
+   },
+   "signatures": [
+    {
+     "path": "(^|/)doom2\\.wad$"
+    }
+   ],
+   "engines": [
+    "idtech-doom"
+   ],
+   "ports": [
+    {
+     "name": "Dwasm",
+     "kind": "byo-web",
+     "url": "https://gmh-code.github.io/dwasm/",
+     "license": "GPL-2.0",
+     "data_files": [
+      "An IWAD (doom.wad / doom2.wad); Freedoom also works"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17"
+    }
+   ]
+  },
+  {
+   "id": "freedoom",
+   "title": "Freedoom",
+   "ids": {},
+   "signatures": [
+    {
+     "path": "(^|/)freedoom[12]?\\.wad$"
+    }
+   ],
+   "engines": [
+    "idtech-doom"
+   ],
+   "redistributable_data": true,
+   "ports": [
+    {
+     "name": "Dwasm",
+     "kind": "byo-web",
+     "url": "https://gmh-code.github.io/dwasm/",
+     "license": "GPL-2.0",
+     "data_files": [
+      "An IWAD (doom.wad / doom2.wad); Freedoom also works"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17"
+    }
+   ]
+  },
+  {
+   "id": "rtcw",
+   "title": "Return to Castle Wolfenstein",
+   "ids": {
+    "steam": [
+     "9010"
+    ]
+   },
+   "signatures": [
+    {
+     "path": "(^|/)main/mp_pak0\\.pk3$"
+    }
+   ],
+   "ports": [
+    {
+     "name": "Wwasm",
+     "kind": "byo-web",
+     "url": "https://gmh-code.github.io/wwasm/",
+     "license": "GPL-3.0",
+     "data_files": [
+      "At least one .pk3 (demo or full)"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17"
+    }
+   ]
+  },
+  {
+   "id": "duke3d",
+   "title": "Duke Nukem 3D",
+   "ids": {},
+   "signatures": [
+    {
+     "path": "(^|/)duke3d\\.grp$"
+    }
+   ],
+   "engines": [
+    "build"
+   ],
+   "ports": [
+    {
+     "name": "eduke32-wasm",
+     "kind": "byo-web",
+     "url": "https://digitalcybersoft.github.io/eduke32-wasm/",
+     "license": "GPL-2.0 + BUILD licence",
+     "data_files": [
+      "Retail DUKE3D.GRP, imported once"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17",
+     "notes": "Shareware episode bundled."
+    }
+   ]
+  },
+  {
+   "id": "tomb-raider",
+   "title": "Tomb Raider",
+   "ids": {},
+   "signatures": [
+    {
+     "path": "(^|/)data/level1\\.phd$"
+    }
+   ],
+   "ports": [
+    {
+     "name": "OpenLara",
+     "kind": "reimpl-web",
+     "url": "https://xproger.info/projects/OpenLara/",
+     "license": "BSD-2-Clause",
+     "data_files": [
+      "Own level files"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17",
+     "notes": "Demo levels hosted by the project."
+    }
+   ]
+  },
+  {
+   "id": "kotor",
+   "title": "Star Wars: Knights of the Old Republic",
+   "ids": {
+    "steam": [
+     "32370"
+    ]
+   },
+   "signatures": [
+    {
+     "path": "(^|/)swkotor\\.exe$"
+    }
+   ],
+   "ports": [
+    {
+     "name": "KotOR.js",
+     "kind": "reimpl-web",
+     "url": "https://github.com/KobaltBlu/KotOR.js",
+     "license": "GPL-3.0",
+     "data_files": [
+      "Installed copy of KotOR"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17",
+     "notes": "Semi-playable; dist is self-hostable."
+    }
+   ]
+  },
+  {
+   "id": "kotor2",
+   "title": "Star Wars: Knights of the Old Republic II - The Sith Lords",
+   "ids": {
+    "steam": [
+     "208580"
+    ]
+   },
+   "signatures": [
+    {
+     "path": "(^|/)swkotor2\\.exe$"
+    }
+   ],
+   "ports": [
+    {
+     "name": "KotOR.js",
+     "kind": "reimpl-web",
+     "url": "https://github.com/KobaltBlu/KotOR.js",
+     "license": "GPL-3.0",
+     "data_files": [
+      "Installed copy of KotOR II"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17",
+     "notes": "Semi-playable; dist is self-hostable."
+    }
+   ]
+  },
+  {
+   "id": "sdlpal",
+   "title": "The Legend of Sword and Fairy",
+   "ids": {},
+   "signatures": [
+    {
+     "path": "(^|/)mgo\\.mkf$"
+    }
+   ],
+   "ports": [
+    {
+     "name": "SDLPAL",
+     "kind": "reimpl-web",
+     "url": "https://sdlpal.github.io/sdlpal/",
+     "license": "GPL-3.0",
+     "data_files": [
+      "Original data files"
+     ],
+     "legal_risk": "low",
+     "verified_at": "2026-11-17"
+    }
+   ]
+  },
+  {
+   "id": "fallout2",
+   "title": "Fallout 2",
+   "ids": {
+    "steam": [
+     "38410"
+    ]
+   },
+   "signatures": [
+    {
+     "path": "(^|/)fallout2\\.exe$"
+    }
+   ],
+   "ports": [
+    {
+     "name": "fallout2-ce web fork (roginvs)",
+     "kind": "byo-web",
+     "url": "https://github.com/roginvs/fallout2-ce",
+     "license": "Sustainable Use License (non-commercial)",
+     "data_files": [
+      "master.dat",
+      "critter.dat",
+      "patch000.dat",
+      "data/"
+     ],
+     "legal_risk": "medium",
+     "verified_at": "2026-11-17",
+     "notes": "Fork repo; upstream fallout2-ce has no web target."
+    }
+   ]
+  },
+  {
+   "id": "gta-vc",
+   "title": "Grand Theft Auto: Vice City",
+   "ids": {
+    "steam": [
+     "12110"
+    ]
+   },
+   "signatures": [
+    {
+     "path": "(^|/)gta-vc\\.exe$"
+    }
+   ],
+   "ports": [
+    {
+     "name": "gta-vice-city-wasm",
+     "kind": "byo-web",
+     "url": "https://joncodeofficial.github.io/gta-vice-city-wasm/",
+     "license": "MIT (wrapper)",
+     "data_files": [
+      "Installed copy of GTA: Vice City"
+     ],
+     "legal_risk": "high",
+     "verified_at": "2026-11-17",
+     "notes": "reVC-derived; re3/reVC were DMCA-taken-down by Take-Two. Opt-in only."
+    }
+   ]
+  },
+  {
+   "id": "lego-island",
+   "title": "LEGO Island",
+   "ids": {},
+   "signatures": [
+    {
+     "path": "(^|/)lego1\\.dll$"
+    }
+   ],
+   "ports": [
+    {
+     "name": "isle-portable",
+     "kind": "reimpl-web",
+     "url": "https://github.com/isledecomp/isle-portable",
+     "license": "LGPL-3.0",
+     "data_files": [
+      "Own install or disc image"
+     ],
+     "legal_risk": "medium",
+     "verified_at": "2026-11-17",
+     "notes": "Self-host the Emscripten build against your own install; do not use rehosted data."
+    }
+   ]
+  },
+  {
+   "id": "jkdf2",
+   "title": "Star Wars: Jedi Knight - Dark Forces II",
+   "ids": {
+    "steam": [
+     "32380"
+    ]
+   },
+   "signatures": [
+    {
+     "path": "(^|/)res1hi\\.gob$"
+    }
+   ],
+   "ports": [
+    {
+     "name": "OpenJKDF2",
+     "kind": "reimpl-web",
+     "url": "https://github.com/shinyquagsire23/OpenJKDF2",
+     "license": "Custom (Lucasfilm notice in LICENSE.md)",
+     "data_files": [
+      "Game data from a licensed copy"
+     ],
+     "legal_risk": "high",
+     "verified_at": "2026-11-17",
+     "notes": "No official hosted page; Emscripten/WebGL2 target documented in README; decomp-derived."
+    }
+   ]
+  }
+ ]
+}
