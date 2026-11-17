@@ -24,6 +24,8 @@ const { pack } = await import(`${SCRIPTS}/pack.mjs`);
 const { verify } = await import(`${SCRIPTS}/verify/verify.mjs`);
 const { makeWebGame } = await import('../fixtures/make-web-game.mjs');
 const { makeAnimSwf } = await import('../fixtures/make-swf.mjs');
+const { makeAnimCom } = await import('../fixtures/make-dos-com.mjs');
+const { makeMZ } = await import('../fixtures/make-pe.mjs');
 const { ensureTool } = await import(`${SCRIPTS}/setup.mjs`);
 
 export const skipReason = () => {
@@ -42,8 +44,11 @@ export async function withToolCache(fn) {
   try { return await fn(); } finally { process.env.PAG_CACHE = prev; }
 }
 // Only a network/fetch failure skips; a sha mismatch, bad lock entry or extract bug must fail loudly.
-const NET = /fetch failed|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENETUNREACH|EHOSTUNREACH|abort|timed? ?out/i;
-export const isNetworkError = (e) => NET.test(`${e?.code ?? ''} ${e?.cause?.code ?? ''} ${e?.name ?? ''} ${e?.message ?? ''}`);
+// Matched on error codes and names (the error or its cause), never on words in a message, except fetch's own "fetch failed".
+const NET_CODE = /^(ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENETUNREACH|EHOSTUNREACH|UND_ERR_(CONNECT_TIMEOUT|HEADERS_TIMEOUT|BODY_TIMEOUT|SOCKET))$/;
+const NET_NAME = /^(AbortError|TimeoutError)$/;
+export const isNetworkError = (e) => [e, e?.cause].some((x) => NET_CODE.test(x?.code ?? '') || NET_NAME.test(x?.name ?? ''))
+  || /fetch failed/i.test(e?.message ?? '');
 // Installs the tool into the shared cache (sha-verified). `ensure` is injectable for tests.
 export async function e2eTool(name, ensure = ensureTool) {
   try { return await withToolCache(() => ensure(name)); } catch (e) {
@@ -138,9 +143,39 @@ async function ruffleResume() {
   // The reload fetches the fixture index again before any file; with the interrupt ignored the first load fetches it once.
   const all = r.report.runs[0].requests.filter((q) => q.method === 'GET').map((q) => q.url);
   assert.ok(all.filter((u) => u === '/__fixture.index.json').length >= 2, `the interrupt did not fire: ${JSON.stringify(all)}`);
-  assert.ok(all.indexOf('/__fixture/anim.swf') < all.lastIndexOf('/__fixture.index.json') && all.indexOf('/__fixture/anim.swf') < all.indexOf('/__fixture/pad1.bin'), 'one file copied, then the page reloaded');
+  const swfAt = all.indexOf('/__fixture/anim.swf');
+  assert.ok(swfAt >= 0 && swfAt < all.lastIndexOf('/__fixture.index.json') && swfAt < all.indexOf('/__fixture/pad1.bin'), `one file copied, then the page reloaded: ${JSON.stringify(all)}`);
   assert.equal(Object.keys(gets).length > 0, true, `no fixture GETs recorded: ${JSON.stringify(r.report.runs[0].requests.map((q) => q.url))}`);
   for (const [u, c] of Object.entries(gets)) assert.ok(c <= 1, `${u} fetched ${c} times`);
+}
+
+// ---- dos-jsdos (BYO): the browser zips the imported files into a .jsdos bundle; dist must hold no game bytes.
+// A .COM has no header, so the survey only calls the folder DOS through an MZ file: an installer stub stands in for it.
+const dosInstall = (dir) => {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(path.join(dir, 'ANIM.COM'), makeAnimCom());
+  writeFileSync(path.join(dir, 'INSTALL.EXE'), makeMZ());
+  return dir;
+};
+
+async function dosByo() {
+  const r = await pipeline('dos-jsdos', dosInstall, { mode: 'byo', tools: ['jsdos'] });
+  assert.equal(r.report.status, 'pass', failing(r.report));
+  assert.deepEqual(r.built, { lane_config: { exe: 'ANIM.COM' }, verdict: 'GO' });
+  console.log(`# dos-jsdos: ${r.report.checks.filter((c) => ['ready', 'fps', 'blank', 'frozen'].includes(c.name)).map((c) => `${c.name}: ${c.detail}`).join(' | ')}`);
+  const files = distFiles(r.distDir);
+  const rt = files.map((f) => path.relative(r.distDir, f).split(path.sep).join('/')).filter((f) => f.startsWith('runtime/')).sort();
+  assert.match(rt[0] ?? '', /^runtime\/dos-jsdos-[0-9a-f]{8}\//);
+  assert.deepEqual(rt.map((f) => f.replace(/^runtime\/[^/]+\//, '')), ['adapter.js', 'dist/emulators/emulators.js', 'dist/emulators/wdosbox.js', 'dist/emulators/wdosbox.wasm', 'dist/emulators/wlibzip.js', 'dist/emulators/wlibzip.wasm', 'package.json']);
+  const com = makeAnimCom();
+  for (const f of files) {
+    const b = readFileSync(f);
+    assert.equal(b.includes(com.subarray(0, 28)) || b.includes(com.subarray(27)), false, `game bytes in dist: ${f}`);
+  }
+  assert.deepEqual(readdirSync(path.join(r.distDir, 'game')), ['manifest.json']);
+  const lic = readFileSync(path.join(r.distDir, 'LICENSES', 'js-dos.txt'), 'utf8');
+  assert.match(lic, /^js-dos 8\.5\.4\nLicense: GPL-2\.0\nSource: https:\/\/github\.com\/caiiiycuk\/js-dos\n/);
+  assert.match(lic, /complete corresponding source code is available at https:\/\/github\.com\/caiiiycuk\/js-dos \(tag\/version 8\.5\.4\)/);
 }
 
 export const CASES = {
@@ -153,6 +188,9 @@ export const CASES = {
   'rt-ruffle': [
     { name: 'rt-ruffle BYO fixture passes verify with zero game bytes in dist', run: ruffleByo },
     { name: 'rt-ruffle import resumes after interrupted import', run: ruffleResume },
+  ],
+  'dos-jsdos': [
+    { name: 'dos-jsdos BYO fixture passes verify with zero game bytes in dist', run: dosByo },
   ],
 };
 

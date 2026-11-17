@@ -96,6 +96,11 @@ test('e2eTool: a sha mismatch fails, a network error skips', async () => {
   await assert.rejects(e2eTool('ruffle', async () => { throw new Error('sha256 mismatch for ruffle-selfhosted: expected a, got b'); }), (e) => !e.skip && /sha256 mismatch/.test(e.message));
   await assert.rejects(e2eTool('ruffle', async () => { throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ENOTFOUND' } }); }), (e) => e.skip === true);
   await assert.rejects(e2eTool('ruffle', async () => { throw Object.assign(new Error('x'), { cause: { code: 'ECONNRESET' } }); }), (e) => e.skip === true);
+  await assert.rejects(e2eTool('ruffle', async () => { throw new DOMException('This operation was aborted', 'AbortError'); }), (e) => e.skip === true);
+  await assert.rejects(e2eTool('ruffle', async () => { throw new DOMException('The operation timed out.', 'TimeoutError'); }), (e) => e.skip === true);
+  // Words alone are not a network failure: an extract or sha bug that says "aborted" or "timed out" must fail.
+  await assert.rejects(e2eTool('ruffle', async () => { throw new Error('tar extract aborted: bad header'); }), (e) => !e.skip && /aborted/.test(e.message));
+  await assert.rejects(e2eTool('ruffle', async () => { throw new Error('unzip timed out on entry 3'); }), (e) => !e.skip && /timed out/.test(e.message));
 });
 
 const skip = skipReason();
