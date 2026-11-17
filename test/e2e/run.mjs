@@ -41,10 +41,14 @@ export async function withToolCache(fn) {
   process.env.PAG_CACHE = TOOL_CACHE;
   try { return await fn(); } finally { process.env.PAG_CACHE = prev; }
 }
-// Installs the tool into the shared cache (sha-verified); an offline machine skips the case ({skip: true}, see main() and the lane tests).
-export async function e2eTool(name) {
-  try { return await withToolCache(() => ensureTool(name)); } catch (e) {
-    throw Object.assign(new Error(`could not get the ${name} runtime (offline?): ${e.message}; e2e case skipped`), { skip: true });
+// Only a network/fetch failure skips; a sha mismatch, bad lock entry or extract bug must fail loudly.
+const NET = /fetch failed|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENETUNREACH|EHOSTUNREACH|abort|timed? ?out/i;
+export const isNetworkError = (e) => NET.test(`${e?.code ?? ''} ${e?.cause?.code ?? ''} ${e?.name ?? ''} ${e?.message ?? ''}`);
+// Installs the tool into the shared cache (sha-verified). `ensure` is injectable for tests.
+export async function e2eTool(name, ensure = ensureTool) {
+  try { return await withToolCache(() => ensure(name)); } catch (e) {
+    if (!isNetworkError(e)) throw e;
+    throw Object.assign(new Error(`could not download the ${name} runtime (network): ${e.message}; e2e case skipped`), { skip: true });
   }
 }
 
@@ -131,6 +135,10 @@ async function ruffleResume() {
   assert.equal(r.report.runs[0].measures.shell.state, 'running');
   const gets = {};
   for (const q of r.report.runs[0].requests) if (q.method === 'GET' && q.url.startsWith('/__fixture/')) gets[q.url] = (gets[q.url] ?? 0) + 1;
+  // The reload fetches the fixture index again before any file; with the interrupt ignored the first load fetches it once.
+  const all = r.report.runs[0].requests.filter((q) => q.method === 'GET').map((q) => q.url);
+  assert.ok(all.filter((u) => u === '/__fixture.index.json').length >= 2, `the interrupt did not fire: ${JSON.stringify(all)}`);
+  assert.ok(all.indexOf('/__fixture/anim.swf') < all.lastIndexOf('/__fixture.index.json') && all.indexOf('/__fixture/anim.swf') < all.indexOf('/__fixture/pad1.bin'), 'one file copied, then the page reloaded');
   assert.equal(Object.keys(gets).length > 0, true, `no fixture GETs recorded: ${JSON.stringify(r.report.runs[0].requests.map((q) => q.url))}`);
   for (const [u, c] of Object.entries(gets)) assert.ok(c <= 1, `${u} fetched ${c} times`);
 }

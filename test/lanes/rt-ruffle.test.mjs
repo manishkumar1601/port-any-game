@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { CASES, cleanup, skipReason } from '../e2e/run.mjs'; // sets temp PAG_CACHE / PAG_HOME
+import { CASES, cleanup, skipReason, e2eTool } from '../e2e/run.mjs'; // sets temp PAG_CACHE / PAG_HOME
 
 const { survey } = await import('../../skills/port-any-game/scripts/survey/survey.mjs');
 const { newPort } = await import('../../skills/port-any-game/scripts/new.mjs');
@@ -62,9 +62,12 @@ test('projector trailer extraction returns original swf', () => {
   const bad = Buffer.from(makeProjector(swf));
   bad.writeUInt32LE(bad.length, bad.length - 4); // length beyond the file
   assert.throws(() => swfFromProjector(new Uint8Array(bad)), /projector/i);
+  const junk = Buffer.concat([Buffer.alloc(64), Buffer.from('not a swf at all'), Buffer.from([0x56, 0x34, 0x12, 0xFA, 16, 0, 0, 0])]);
+  assert.throws(() => swfFromProjector(new Uint8Array(junk)), /no FWS.CWS.ZWS header/);
 });
 
 test('build fails without the ruffle tool and never downloads', async () => {
+  rmSync(toolDir(loadLock()['ruffle-selfhosted']), { recursive: true, force: true }); // independent of any fakeTool() in other tests (temp PAG_CACHE)
   const portDir = await portOf(install({ 'game.swf': makeAnimSwf() }));
   await assert.rejects(lane.build(portDir), /pag setup ruffle --yes/);
 });
@@ -87,6 +90,12 @@ test('build fails clearly when there is no Flash content', async () => {
   fakeTool();
   const portDir = await portOf(install({ 'readme.txt': 'x' }));
   await assert.rejects(lane.build(portDir), /no SWF/i);
+});
+
+test('e2eTool: a sha mismatch fails, a network error skips', async () => {
+  await assert.rejects(e2eTool('ruffle', async () => { throw new Error('sha256 mismatch for ruffle-selfhosted: expected a, got b'); }), (e) => !e.skip && /sha256 mismatch/.test(e.message));
+  await assert.rejects(e2eTool('ruffle', async () => { throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ENOTFOUND' } }); }), (e) => e.skip === true);
+  await assert.rejects(e2eTool('ruffle', async () => { throw Object.assign(new Error('x'), { cause: { code: 'ECONNRESET' } }); }), (e) => e.skip === true);
 });
 
 const skip = skipReason();

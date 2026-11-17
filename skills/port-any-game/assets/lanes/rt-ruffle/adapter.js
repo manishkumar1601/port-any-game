@@ -7,7 +7,9 @@ export function swfFromProjector(b) {
   const ok = n >= 8 && b[n - 8] === 0x56 && b[n - 7] === 0x34 && b[n - 6] === 0x12 && b[n - 5] === 0xFA;
   const len = ok ? new DataView(b.buffer, b.byteOffset, n).getUint32(n - 4, true) : 0;
   if (!ok || len < 8 || len > n - 8) throw new Error('not a Flash projector: no SWF trailer at the end of the file');
-  return b.slice(n - 8 - len, n - 8);
+  const swf = b.slice(n - 8 - len, n - 8);
+  if (!/^[FCZ]WS$/.test(String.fromCharCode(swf[0], swf[1], swf[2]))) throw new Error('not a Flash projector: the trailer does not point at a SWF (no FWS/CWS/ZWS header)');
+  return swf;
 }
 
 let frames = 0;
