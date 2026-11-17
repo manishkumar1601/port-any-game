@@ -481,7 +481,7 @@
   },
   {
    "id": "tomb-raider",
-   "title": "Tomb Raider",
+   "title": "Tomb Raider (incl. Unfinished Business)",
    "ids": {},
    "signatures": [
     {
@@ -675,7 +675,7 @@
    },
    "signatures": [
     {
-     "path": "(^|/)res1hi\\.gob$"
+     "path": "(^|/)jk\\.exe$"
     }
    ],
    "ports": [
