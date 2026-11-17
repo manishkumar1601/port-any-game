@@ -1,0 +1,8 @@
+{
+  "name": "port-any-game",
+  "version": "0.1.0",
+  "description": "Port PC games you own to a private browser build: survey, choose a lane, build and verify.",
+  "license": "MIT",
+  "repository": "https://github.com/<org>/port-any-game",
+  "skills": ["./skills/port-any-game"]
+}

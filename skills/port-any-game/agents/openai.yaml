@@ -1,0 +1,6 @@
+interface:
+  display_name: "Port Any Game"
+  short_description: "Port a PC game you own to a private browser build"
+  default_prompt: "Use $port-any-game to survey the game in this folder and recommend a porting lane."
+policy:
+  allow_implicit_invocation: true

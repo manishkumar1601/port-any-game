@@ -1,0 +1,11 @@
+{
+  "name": "port-any-game",
+  "owner": { "name": "port-any-game contributors" },
+  "plugins": [
+    {
+      "name": "port-any-game",
+      "source": "./",
+      "description": "Port PC games you own to a private browser build: survey, choose a lane, build and verify."
+    }
+  ]
+}

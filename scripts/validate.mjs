@@ -1,0 +1,93 @@
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ALLOWED_KEYS = new Set(['name', 'description', 'license', 'compatibility', 'metadata', 'allowed-tools']);
+const readJson = (f) => JSON.parse(readFileSync(f, 'utf8'));
+
+// Simple `key: value` lines between `---` fences (no YAML library). Returns null if no fence.
+function frontmatter(text) {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/.exec(text);
+  if (!m) return null;
+  const out = {};
+  for (const line of m[1].split(/\r?\n/)) {
+    const kv = /^([A-Za-z][\w-]*):\s*(.*)$/.exec(line);
+    if (kv) out[kv[1]] = kv[2].replace(/^(["'])(.*)\1$/, '$2');
+  }
+  return out;
+}
+
+function* walk(dir) {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) yield* walk(p);
+    else yield p;
+  }
+}
+
+export function validateRepo(rootDir) {
+  const errors = [];
+  const rel = (p) => path.relative(rootDir, p).split(path.sep).join('/');
+
+  // Versions must agree across manifests.
+  const versions = {};
+  for (const f of ['package.json', '.claude-plugin/plugin.json', 'plugin.json']) {
+    const p = path.join(rootDir, f);
+    if (existsSync(p)) versions[f] = readJson(p).version;
+  }
+  if (new Set(Object.values(versions)).size > 1) errors.push(`version drift: ${JSON.stringify(versions)}`);
+
+  const skillsDir = path.join(rootDir, 'skills');
+  const skills = existsSync(skillsDir)
+    ? readdirSync(skillsDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name)
+    : [];
+  if (!skills.length) errors.push('no skills found under skills/');
+
+  for (const name of skills) {
+    const dir = path.join(skillsDir, name);
+    const skillFile = path.join(dir, 'SKILL.md');
+    if (!existsSync(skillFile)) { errors.push(`${rel(dir)}: missing SKILL.md`); continue; }
+    const text = readFileSync(skillFile, 'utf8');
+    const fm = frontmatter(text);
+    if (!fm) errors.push(`${rel(skillFile)}: missing frontmatter`);
+    else {
+      for (const k of Object.keys(fm)) if (!ALLOWED_KEYS.has(k)) errors.push(`${rel(skillFile)}: unsupported frontmatter key "${k}"`);
+      if (fm.name !== name) errors.push(`${rel(skillFile)}: name "${fm.name}" does not match folder "${name}"`);
+      if (!fm.description) errors.push(`${rel(skillFile)}: missing description`);
+      else if (fm.description.length > 1024) errors.push(`${rel(skillFile)}: description is ${fm.description.length} chars (max 1024)`);
+    }
+    const lines = text.split(/\r?\n/).length;
+    if (lines > 500) errors.push(`${rel(skillFile)}: ${lines} lines (max 500 lines)`);
+
+    const yamlFile = path.join(dir, 'agents', 'openai.yaml');
+    if (existsSync(yamlFile)) {
+      const y = readFileSync(yamlFile, 'utf8');
+      const val = (k) => new RegExp(`^\\s*${k}:\\s*(.*)$`, 'm').exec(y)?.[1].trim();
+      for (const line of y.split(/\r?\n/)) {
+        const kv = /^\s*[\w.]+:\s*(\S.*)$/.exec(line);
+        if (kv && !/^(".*"|true|false)$/.test(kv[1])) errors.push(`${rel(yamlFile)}: unquoted string value: ${line.trim()}`);
+      }
+      const sd = val('short_description')?.replace(/^"|"$/g, '');
+      if (sd === undefined || sd.length < 25 || sd.length > 64) errors.push(`${rel(yamlFile)}: short_description must be 25-64 chars (got ${sd?.length})`);
+      if (!val('default_prompt')?.includes(`$${name}`)) errors.push(`${rel(yamlFile)}: default_prompt must contain $${name}`);
+    } else errors.push(`${rel(yamlFile)}: missing`);
+
+    // Relative links in SKILL.md and references/ must resolve.
+    const refs = path.join(dir, 'references');
+    const mdFiles = [skillFile, ...(existsSync(refs) ? [...walk(refs)].filter((f) => f.endsWith('.md')) : [])];
+    for (const f of mdFiles) {
+      for (const m of readFileSync(f, 'utf8').matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g)) {
+        const target = m[1].split('#')[0];
+        if (!target || /^([a-z][a-z0-9+.-]*:|\/)/i.test(target)) continue;
+        if (!existsSync(path.resolve(path.dirname(f), target))) errors.push(`${rel(f)}: broken link ${m[1]}`);
+      }
+    }
+  }
+  return errors;
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const errors = validateRepo(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'));
+  if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
+  console.log('validate: ok');
+}
