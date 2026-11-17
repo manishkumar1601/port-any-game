@@ -673,11 +673,7 @@
      "32380"
     ]
    },
-   "signatures": [
-    {
-     "path": "(^|/)jk\\.exe$"
-    }
-   ],
+   "signatures": [],
    "ports": [
     {
      "name": "OpenJKDF2",

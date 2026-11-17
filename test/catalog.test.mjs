@@ -113,8 +113,8 @@ test('level1.phd matches tomb-raider entry covering TR1 and Unfinished Business'
   assert.match(cat.games.find((g) => g.id === 'tomb-raider').title, /Unfinished Business/);
 });
 
-test('jkdf2 matches JK.EXE and not the shared Res1hi.gob', () => {
+test('bare JK.EXE or Res1hi.gob gives no signature match for jkdf2', () => {
   const ids = (n) => matchCatalog(cat, { identity: none, files: [f(n)], engines: [] }).map((x) => x.game_id);
-  assert.deepEqual(ids('JK.EXE'), ['jkdf2']);
+  assert.deepEqual(ids('JK.EXE'), []);
   assert.deepEqual(ids('Res1hi.gob'), []);
 });
