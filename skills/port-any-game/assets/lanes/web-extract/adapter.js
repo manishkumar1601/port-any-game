@@ -23,16 +23,18 @@ export default {
       window.dispatchEvent(m);
       if (m.defaultPrevented) e.preventDefault();
     }, true);
+    // Every load gets a fresh global (a meta-refresh entry loads twice), so attach per load, once per window.
+    const seen = new WeakSet();
     const hook = () => {
       const w = f.contentWindow;
+      if (seen.has(w)) return;
+      seen.add(w);
       for (const t of ['keydown', 'keyup']) mirror(w, t);
       for (const t of ['pointerdown', 'pointerup']) w.addEventListener(t, () => window.dispatchEvent(new Event(t)), true);
     };
+    f.addEventListener('load', () => { hook(); f.focus(); f.contentWindow.focus(); });
     ctx.host.append(f);
-    await new Promise((resolve) => { f.onload = resolve; f.src = entry; });
-    hook(); // listeners need the loaded document; frame counting does not (the build-time hook ran first)
-    f.focus();
-    f.contentWindow.focus();
+    await new Promise((resolve) => { f.addEventListener('load', resolve, { once: true }); f.src = entry; });
   },
   pause() { running = false; audio?.suspend().catch(() => {}); },
   resume() { running = true; audio?.resume().catch(() => {}); },

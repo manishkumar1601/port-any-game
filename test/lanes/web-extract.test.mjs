@@ -1,6 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -166,24 +167,69 @@ test('frame hook counts one frame per distinct timestamp, however many rAF consu
   assert.equal(calls, 4, 'every callback still runs');
 });
 
-test('adapter mirrors iframe keys as cancelable events and honours preventDefault', async () => {
-  const win = Object.assign(new EventTarget(), { focus() {} });
-  const frame = { style: {}, setAttribute() {}, focus() {}, contentWindow: win };
-  Object.defineProperty(frame, 'src', { set() { queueMicrotask(() => frame.onload()); } });
+// Runs the adapter against a fake iframe; fetch decides the HEAD result. Returns {frame, win(), shell events, errors}.
+async function startAdapter(headStatus = 200) {
+  const wins = [];
+  const newWin = () => { const w = Object.assign(new EventTarget(), { focus() {} }); wins.push(w); return w; };
+  const frame = Object.assign(new EventTarget(), { style: {}, setAttribute() {}, focus() {}, contentWindow: newWin() });
+  Object.defineProperty(frame, 'src', { set() { queueMicrotask(() => frame.dispatchEvent(new Event('load'))); } });
   const saved = Object.fromEntries(['window', 'document', 'KeyboardEvent', 'fetch'].map((k) => [k, globalThis[k]]));
   globalThis.window = new EventTarget();
   globalThis.document = { createElement: () => frame };
   globalThis.KeyboardEvent = class extends Event { constructor(t, o) { super(t, o); this.code = o.code; this.key = o.key; } };
-  globalThis.fetch = async () => ({ ok: true, status: 200 });
+  globalThis.fetch = async () => ({ ok: headStatus === 200, status: headStatus });
+  const restore = () => { for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete globalThis[k]; else globalThis[k] = v; } };
   const adapter = (await import(new URL('adapter.js', ASSETS).href)).default;
-  await adapter.start({ host: { append() {} }, audio: {}, reportFrame() {}, reportError() {} });
-  let shellSaw = null;
-  window.addEventListener('keydown', (e) => { shellSaw = e; e.preventDefault(); });
-  const real = new KeyboardEvent('keydown', { code: 'Tab', key: 'Tab', cancelable: true });
-  win.dispatchEvent(real);
-  assert.equal(shellSaw?.cancelable, true);
-  assert.equal(real.defaultPrevented, true, 'the real iframe event is cancelled');
-  for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete globalThis[k]; else globalThis[k] = v; }
+  const errors = [];
+  try {
+    await adapter.start({ host: { append() {} }, audio: {}, reportFrame() {}, reportError: (e) => errors.push(e) });
+  } catch (e) { restore(); throw e; }
+  return { frame, wins, errors, restore, navigate() { frame.contentWindow = newWin(); frame.dispatchEvent(new Event('load')); } };
+}
+
+test('adapter mirrors iframe keys as cancelable events, also after a redirect to a new document', async () => {
+  const a = await startAdapter();
+  try {
+    for (const round of ['first document', 'after redirect']) {
+      if (round === 'after redirect') a.navigate();
+      let shellSaw = null;
+      const onKey = (e) => { shellSaw = e; e.preventDefault(); };
+      window.addEventListener('keydown', onKey);
+      const real = new KeyboardEvent('keydown', { code: 'Tab', key: 'Tab', cancelable: true });
+      a.frame.contentWindow.dispatchEvent(real);
+      window.removeEventListener('keydown', onKey);
+      assert.equal(shellSaw?.cancelable, true, round);
+      assert.equal(real.defaultPrevented, true, `${round}: the real iframe event is cancelled`);
+    }
+    // no duplicates: one real event reaches the shell once, even after a repeated load of the same window
+    let n = 0;
+    window.addEventListener('keyup', () => n++);
+    a.frame.dispatchEvent(new Event('load'));
+    a.frame.contentWindow.dispatchEvent(new KeyboardEvent('keyup', { code: 'Tab', key: 'Tab' }));
+    assert.equal(n, 1);
+  } finally { a.restore(); }
+});
+
+test('adapter start() throws when the entry is a 404', async () => {
+  await assert.rejects(startAdapter(404), /game\/index\.html \(HTTP 404\)/);
+});
+
+test('build prefers the main exe with a zip overlay over other exes', async () => {
+  const install = path.join(dirOf(), 'install');
+  mkdirSync(install, { recursive: true });
+  const other = { ...gameFiles(), 'index.html': '<p>other</p>' };
+  const big = { ...gameFiles(), 'pad.bin': randomBytes(20000) }; // the larger exe is the survey's main
+  writeFileSync(path.join(install, 'Game.exe'), Buffer.concat([makePE(), makeZip(big)]));
+  writeFileSync(path.join(install, 'A-helper.exe'), Buffer.concat([makePE(), makeZip(other)]));
+  const portDir = await portOf(install);
+  const sp = path.join(portDir, 'survey.json');
+  const s = JSON.parse(readFileSync(sp, 'utf8'));
+  assert.equal(s.executables.find((e) => e.role === 'main').path, 'Game.exe');
+  s.executables.sort((x, y) => (x.role === 'main') - (y.role === 'main')); // main last: only the role preference picks it
+  writeFileSync(sp, JSON.stringify(s));
+  await lane.build(portDir);
+  assert.ok(existsSync(path.join(portDir, 'build', 'game', 'pad.bin')));
+  assert.ok(!readFileSync(path.join(portDir, 'build', 'game', 'index.html'), 'utf8').includes('<p>other</p>'));
 });
 
 test('extractZip copes with a zip64 record and locator in front of a valid 32-bit EOCD', async () => {
