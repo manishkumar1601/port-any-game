@@ -54,7 +54,7 @@ test('known-port first on catalog match', async () => {
   assert.ok(s.catalog_matches.some((m) => m.game_id === 'caesar3'));
   assert.equal(s.lanes[0].lane, 'known-port');
   assert.equal(s.verdict.primary_lane, 'known-port');
-  assert.ok(s.verdict.required_acknowledgements.includes('ACK_RUNTIME_LICENSE'));
+  assert.ok(s.verdict.required_acknowledgements.includes('ACK_PRIVATE_USE_ONLY'));
 });
 
 test('UPX is WARN and adds ACK', async () => {
