@@ -2,6 +2,7 @@
 // Add a command = one line in COMMANDS; its module exports run(argv) -> exit code.
 const COMMANDS = {
   survey: () => import('./survey/survey.mjs'),
+  new: () => import('./new.mjs'),
   doctor: () => import('./doctor.mjs'),
   setup: () => import('./setup.mjs'),
   // guard fails open (Copilot hooks fail closed on a crash): any import failure exits 0 silently.
