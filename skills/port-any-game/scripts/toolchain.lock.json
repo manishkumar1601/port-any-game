@@ -1,12 +1,15 @@
 {
   "ruffle-selfhosted": {
     "name": "ruffle-selfhosted",
-    "version": "nightly-2026-11-10",
-    "url": "https://github.com/ruffle-rs/ruffle/releases/download/nightly-2026-11-10/ruffle-nightly-2026_11_10-web-selfhosted.zip",
-    "sha256": "62f434ce358cb77aa0798176a36933ea93daf4c0711b04f2c901900f7fc1b730",
-    "size": 10438078,
-    "archive": "zip",
-    "licenseFile": "LICENSE.md"
+    "version": "0.7.1",
+    "url": "https://registry.npmjs.org/@ruffle-rs/ruffle/-/ruffle-0.7.1.tgz",
+    "sha256": "dc9e7407549a91accc41a14932b0b9d9a9d51a3742ce6f020888c8a76682b157",
+    "size": 10562340,
+    "archive": "tgz",
+    "licenseFile": "LICENSE_MIT",
+    "strip": 1,
+    "license": "(MIT OR Apache-2.0)",
+    "source": "https://github.com/ruffle-rs/ruffle"
   },
   "js-dos": {
     "name": "js-dos",
@@ -16,12 +19,16 @@
     "size": 20563073,
     "archive": "tgz",
     "strip": 1,
-    "licenseFile": "package.json"
+    "licenseFile": "package.json",
+    "license": "GPL-2.0",
+    "source": "https://github.com/caiiiycuk/js-dos"
   },
   "playwright": {
     "name": "playwright",
     "version": "1.65.1",
     "special": "npm",
-    "licenseFile": "node_modules/playwright/LICENSE"
+    "licenseFile": "node_modules/playwright/LICENSE",
+    "license": "Apache-2.0",
+    "source": "https://github.com/microsoft/playwright"
   }
 }

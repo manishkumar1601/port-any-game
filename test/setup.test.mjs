@@ -118,3 +118,11 @@ test('real lock pins are well-formed', () => {
   for (const n of ['ruffle-selfhosted', 'js-dos']) assert.match(l[n].sha256, /^[0-9a-f]{64}$/);
   assert.equal(l.playwright.special, 'npm');
 });
+
+test('real lock entries carry license and source for pack notices', () => {
+  const l = JSON.parse(readFileSync(new URL('../skills/port-any-game/scripts/toolchain.lock.json', import.meta.url), 'utf8'));
+  for (const n of ['ruffle-selfhosted', 'js-dos']) {
+    assert.ok(l[n].license && /^https:\/\//.test(l[n].source), n);
+    assert.equal(l[n].archive, 'tgz');
+  }
+});
