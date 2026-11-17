@@ -3,6 +3,8 @@
 const COMMANDS = {
   survey: () => import('./survey/survey.mjs'),
   new: () => import('./new.mjs'),
+  build: () => import('./build.mjs'),
+  pack: () => import('./pack.mjs'),
   serve: () => import('./serve.mjs'),
   doctor: () => import('./doctor.mjs'),
   setup: () => import('./setup.mjs'),
