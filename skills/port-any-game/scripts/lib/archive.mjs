@@ -26,9 +26,17 @@ export function listZip(buf) {
   }
   if (eocd < 0) throw new Error('not a zip: end of central directory not found');
   const count = buf.readUInt16LE(eocd + 10);
+  const cdSize = buf.readUInt32LE(eocd + 12);
+  const cdOff = buf.readUInt32LE(eocd + 16);
   // A zip appended to an exe has offsets relative to the zip start: base is how far the zip is shifted.
-  const base = Math.max(0, eocd - buf.readUInt32LE(eocd + 12) - buf.readUInt32LE(eocd + 16));
-  let p = buf.readUInt32LE(eocd + 16) + base;
+  // Base 0 when the central directory is where the EOCD says (also zip64 files whose 32-bit EOCD is valid);
+  // otherwise the directory ends at the zip64 record (56 bytes + 20-byte locator) when there is a locator, else at the EOCD.
+  let base = 0;
+  if (!(cdOff + 4 <= buf.length && buf.readUInt32LE(cdOff) === 0x02014b50)) {
+    const z64 = eocd >= 20 && buf.readUInt32LE(eocd - 20) === 0x07064b50 ? 76 : 0;
+    base = Math.max(0, eocd - z64 - cdSize - cdOff);
+  }
+  let p = cdOff + base;
   const out = [];
   for (let i = 0; i < count; i++) {
     if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error('corrupt zip central directory');
@@ -61,7 +69,7 @@ export async function extractZip(zipPath, destDir) {
     const raw = buf.subarray(start, start + e.csize);
     let data;
     if (e.method === 0) data = raw;
-    else if (e.method === 8) data = inflateRawSync(raw);
+    else if (e.method === 8) data = inflateRawSync(raw, { maxOutputLength: Math.max(e.size, 1) }); // zip bomb guard: never more than the declared size
     else throw new Error(`unsupported zip method ${e.method} for ${e.name}`);
     writeOut(target, data, (e.attr >>> 16) & 0o111 ? (e.attr >>> 16) : 0);
     written.push(e.name);

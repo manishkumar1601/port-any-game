@@ -1,9 +1,11 @@
 // Rung 0: the game already is a web app in a native wrapper (or HTML5 engine export).
 // build() extracts it to <port>/build/game/ (R35), scans for Node/Steam API use and counts case-mismatched references.
-import { appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, copyFileSync, cpSync, renameSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { extractAsar, extractZip } from '../lib/archive.mjs';
 
+const HOOK = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets', 'lanes', 'web-extract', 'frame-hook.js');
 const ENGINES = ['nwjs', 'electron', 'rpgmaker-mv', 'rpgmaker-mz', 'construct', 'gdevelop', 'twine'];
 
 const API_RES = [['require', /\brequire\(/g], ['process', /\bprocess\./g], ['nw', /\bnw\./g], ['greenworks', /\bgreenworks/g]];
@@ -26,7 +28,7 @@ async function extract(portDir, game, out) {
   if (isFile(nw)) return void (await extractZip(nw, out));
   let survey = {};
   try { survey = JSON.parse(readFileSync(path.join(portDir, 'survey.json'), 'utf8')); } catch { /* no survey: skip this source */ }
-  const exe = (survey.executables ?? []).find((e) => e.overlay?.magic === 'zip' && isFile(path.join(game, e.path)));
+  const exe = (survey.executables ?? []).filter((e) => e.overlay?.magic === 'zip' && isFile(path.join(game, e.path))).sort((a, b) => (b.role === 'main') - (a.role === 'main'))[0];
   if (exe) return void (await extractZip(path.join(game, exe.path), out));
   const asar = path.join(game, 'resources', 'app.asar');
   if (isFile(asar)) return void (await extractAsar(asar, out));
@@ -35,20 +37,36 @@ async function extract(portDir, game, out) {
   throw new Error('no web content found: expected package.nw, a zip appended to the exe, resources/app.asar, resources/app/ or www/');
 }
 
-// package.json main when it is an html file, else index.html. Normalised so build/game/index.html is the entry.
+// package.json main (an html file inside the folder) wins, else index.html. build/game/index.html is the entry the adapter
+// loads; when main is another file, index.html becomes a meta-refresh to it (an existing index.html is kept as __pag_index_orig.html).
+// Returns the real entry path. The frame hook goes in first in its <head> (R39).
 function normaliseEntry(out) {
   let main;
-  try { main = JSON.parse(readFileSync(path.join(out, 'package.json'), 'utf8').replace(/^﻿/, '')).main; } catch { /* none */ }
+  try { main = JSON.parse(readFileSync(path.join(out, 'package.json'), 'utf8').replace(/^\uFEFF/, '')).main; } catch { /* none */ }
   if (typeof main === 'string') {
-    main = path.posix.normalize(main.replace(/^file:\/+/, '').replace(/[?#].*$/, '').replace(/\\/g, '/'));
-    if (!/\.html?$/i.test(main) || main.startsWith('..') || !isFile(path.join(out, main))) main = undefined;
-  }
-  if (main && main !== 'index.html' && !isFile(path.join(out, 'index.html'))) {
-    // ponytail: when both exist index.html wins over package.json main; a meta refresh keeps relative urls working.
+    main = main.replace(/^file:\/+/, '').replace(/[?#].*$/, '').replace(/\\/g, '/');
+    const n = path.posix.normalize(main);
+    main = /\.html?$/i.test(n) && !main.startsWith('/') && !path.win32.isAbsolute(main) && !n.startsWith('..') && isFile(path.join(out, n)) ? n : undefined;
+  } else main = undefined;
+  let entry = 'index.html';
+  if (main && main !== 'index.html') {
+    if (isFile(path.join(out, 'index.html'))) renameSync(path.join(out, 'index.html'), path.join(out, '__pag_index_orig.html'));
     writeFileSync(path.join(out, 'index.html'), `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${encodeURI(main)}">\n`);
+    entry = main;
   } else if (!isFile(path.join(out, 'index.html'))) {
-    throw new Error('no entry HTML found: package.json main is not an html file and there is no index.html');
+    throw new Error('no entry HTML found: package.json main is not an html file inside the game and there is no index.html');
   }
+  return entry;
+}
+
+// Inserts <script src="__pag_hook.js"> as the first child of <head> (creating the position after <html> or the doctype when absent).
+export function injectHook(html, src) {
+  const tag = `<script src="${src}"></script>`;
+  for (const re of [/<head\b[^>]*>/i, /<html\b[^>]*>/i, /<!doctype[^>]*>/i]) {
+    const m = re.exec(html);
+    if (m) return html.slice(0, m.index + m[0].length) + tag + html.slice(m.index + m[0].length);
+  }
+  return tag + html;
 }
 
 function scanApis(out, files) {
@@ -91,7 +109,7 @@ export default {
   id: 'web-extract', rung: 0, available: true, milestone: 'M1', dataModes: ['bundled'],
   acks: ['ACK_PRIVATE_USE_ONLY'], odds: '85-95%',
   checklist: ['Extract package.nw / app.asar / www into build/game', 'Find the entry HTML', 'Map path case', 'Scan for Node and Steamworks API use', 'Serve and verify the first frame'],
-  // The survey cannot say whether an entry HTML exists (it lists no archive contents), so an engine hit is GO and build() fails clearly without an entry.
+  // R38: the survey carries no full file list, so an engine hit is GO; build() validates the entry and fails clearly without one.
   detect(s) {
     const hit = (s.engines ?? []).find((e) => ENGINES.includes(e.id));
     return hit ? { verdict: 'GO', why: `already web content (${hit.id})` } : { verdict: 'NO', why: 'no web wrapper or HTML5 engine found' };
@@ -99,13 +117,26 @@ export default {
   async build(portDir) {
     const dir = path.resolve(portDir);
     const out = path.join(dir, 'build', 'game');
-    rmSync(out, { recursive: true, force: true, maxRetries: 2 });
-    mkdirSync(out, { recursive: true });
-    await extract(dir, path.join(dir, 'game'), out);
-    normaliseEntry(out);
-    const files = listFiles(out);
-    const nodeApiUses = scanApis(out, files);
-    const caseFixes = countCaseFixes(out, files);
+    const tmp = path.join(dir, 'build', `.tmp-${process.pid}`);
+    rmSync(out, { recursive: true, force: true, maxRetries: 2 }); // R35; a failed build then leaves no half-built game for pack (R27)
+    rmSync(tmp, { recursive: true, force: true, maxRetries: 2 });
+    mkdirSync(tmp, { recursive: true });
+    let files, nodeApiUses, caseFixes;
+    try {
+      await extract(dir, path.join(dir, 'game'), tmp);
+      const entry = normaliseEntry(tmp);
+      const hookSrc = path.posix.relative(path.posix.dirname(entry), '__pag_hook.js');
+      copyFileSync(HOOK, path.join(tmp, '__pag_hook.js'));
+      const ep = path.join(tmp, ...entry.split('/'));
+      writeFileSync(ep, injectHook(readFileSync(ep, 'utf8'), hookSrc));
+      files = listFiles(tmp);
+      nodeApiUses = scanApis(tmp, files);
+      caseFixes = countCaseFixes(tmp, files);
+      renameSync(tmp, out);
+    } catch (e) {
+      rmSync(tmp, { recursive: true, force: true, maxRetries: 2 });
+      throw e;
+    }
     const verdict = nodeApiUses.length ? 'HARD' : 'GO';
     const log = path.join(dir, 'PORTING_LOG.md');
     const section = [

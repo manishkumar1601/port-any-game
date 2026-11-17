@@ -50,7 +50,17 @@
       for (const v of buf) s += v * v;
       rms = Math.max(rms ?? 0, Math.sqrt(s / buf.length));
     }
-    return { contexts: [...contexts].map((c) => c.state), rms };
+    const out = { contexts: [...contexts].map((c) => c.state), rms };
+    // Same-origin child frames carry their own instrument: fold their audio in (an iframe game's AudioContext lives there).
+    for (const fr of document.querySelectorAll('iframe, frame')) {
+      try {
+        const a = fr.contentWindow?.__pagVerify?.audio();
+        if (!a) continue;
+        out.contexts.push(...a.contexts);
+        if (a.rms != null) out.rms = Math.max(out.rms ?? 0, a.rms);
+      } catch { /* cross-origin frame */ }
+    }
+    return out;
   };
 
   // Fake standard gamepad. Same-origin child frames share the top frame's pad, so pad() reaches iframe games too.

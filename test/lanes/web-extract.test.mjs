@@ -1,6 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import vm from 'node:vm';
+import { existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { CASES, cleanup, skipReason } from '../e2e/run.mjs'; // sets temp PAG_CACHE / PAG_HOME
@@ -11,7 +12,9 @@ const { LANES } = await import('../../skills/port-any-game/scripts/lanes/index.m
 const { extractZip } = await import('../../skills/port-any-game/scripts/lib/archive.mjs');
 const { makeWebGame, makeZip, gameFiles } = await import('../fixtures/make-web-game.mjs');
 const { makePE } = await import('../fixtures/make-pe.mjs');
+const { injectHook } = await import('../../skills/port-any-game/scripts/lanes/web-extract.mjs');
 const lane = LANES['web-extract'];
+const ASSETS = new URL('../../skills/port-any-game/assets/lanes/web-extract/', import.meta.url);
 
 const tmp = mkdtempSync(path.join(tmpdir(), 'pag-we-'));
 after(() => { rmSync(tmp, { recursive: true, force: true, maxRetries: 5 }); cleanup(); });
@@ -97,6 +100,113 @@ test('build reads the electron asar and fails clearly without content', async ()
   const install = path.join(dirOf(), 'install');
   writeTree(install, { 'nw.dll': '' });
   await assert.rejects(lane.build(await portOf(install)), /no web content found/);
+});
+
+test('build injects the frame hook first in <head> of the entry, leaving game/ untouched', async () => {
+  const { portDir } = await fixturePort('nwjs');
+  await lane.build(portDir);
+  const html = readFileSync(path.join(portDir, 'build', 'game', 'index.html'), 'utf8');
+  assert.match(html, /<head>\s*<script src="__pag_hook\.js"><\/script>/);
+  assert.ok(existsSync(path.join(portDir, 'build', 'game', '__pag_hook.js')));
+  assert.ok(!existsSync(path.join(portDir, 'game', '__pag_hook.js')));
+});
+
+test('injectHook handles uppercase HEAD, no head, no html', () => {
+  const tag = '<script src="h.js"></script>';
+  assert.equal(injectHook('<!DOCTYPE html><HTML><HEAD lang=x><title>t</title></HEAD>', 'h.js'), `<!DOCTYPE html><HTML><HEAD lang=x>${tag}<title>t</title></HEAD>`);
+  assert.equal(injectHook('<!doctype html><html><body>x</body></html>', 'h.js'), `<!doctype html><html>${tag}<body>x</body></html>`);
+  assert.equal(injectHook('<!doctype html><p>x', 'h.js'), `<!doctype html>${tag}<p>x`);
+  assert.equal(injectHook('<p>x', 'h.js'), `${tag}<p>x`);
+  assert.equal(injectHook('<header>x</header><head>', 'h.js'), `<header>x</header><head>${tag}`, 'a <header> is not <head>');
+});
+
+test('package.json main wins over index.html, behind a meta-refresh; bad mains are ignored', async () => {
+  const build = async (main) => {
+    const install = path.join(dirOf(), 'install');
+    writeTree(install, { 'nw.dll': '', 'package.nw/package.json': JSON.stringify({ main }), 'package.nw/index.html': '<p>index</p>', 'package.nw/app/start.html': '<head></head>start', 'package.nw/start.html': '<p>root</p>' });
+    const portDir = await portOf(install);
+    await lane.build(portDir);
+    return path.join(portDir, 'build', 'game');
+  };
+  let out = await build('app/start.html');
+  assert.match(readFileSync(path.join(out, 'index.html'), 'utf8'), /url=app\/start\.html/);
+  assert.match(readFileSync(path.join(out, 'app', 'start.html'), 'utf8'), /<head><script src="\.\.\/__pag_hook\.js">/, 'hook path is relative to the entry');
+  assert.ok(readFileSync(path.join(out, '__pag_index_orig.html'), 'utf8').includes('index'), 'the original index.html is kept');
+  for (const bad of ['../start.html', '/start.html', 'missing.html', 'main.js']) {
+    out = await build(bad);
+    assert.match(readFileSync(path.join(out, 'index.html'), 'utf8'), /<p>index<\/p>/, `${bad} falls back to index.html`);
+    assert.ok(!existsSync(path.join(out, '__pag_index_orig.html')), bad);
+  }
+});
+
+test('a failed build leaves no build/game behind', async () => {
+  const install = path.join(dirOf(), 'install');
+  writeTree(install, { 'nw.dll': '', 'package.nw/readme.txt': 'no html' });
+  const portDir = await portOf(install);
+  await assert.rejects(lane.build(portDir), /no entry HTML/);
+  assert.ok(!existsSync(path.join(portDir, 'build', 'game')));
+  assert.deepEqual(readdirSync(path.join(portDir, 'build')), []);
+});
+
+test('frame hook counts one frame per distinct timestamp, however many rAF consumers', () => {
+  const cbs = [];
+  const parent = { n: 0, __pagFrame() { this.n++; } };
+  const win = { parent, requestAnimationFrame: (cb) => cbs.push(cb), addEventListener() {} };
+  vm.runInNewContext(readFileSync(new URL('frame-hook.js', ASSETS), 'utf8'), { window: win });
+  const tick = (t) => { cbs.splice(0).forEach((cb) => cb(t)); };
+  let calls = 0;
+  const loop = () => { calls++; win.requestAnimationFrame(loop); };
+  win.requestAnimationFrame(loop);
+  win.requestAnimationFrame(loop); // a second consumer in the same frame
+  tick(16);
+  assert.equal(win.__pagFrames.frames, 1);
+  tick(33);
+  assert.equal(win.__pagFrames.frames, 2);
+  assert.equal(parent.n, 2);
+  assert.equal(calls, 4, 'every callback still runs');
+});
+
+test('adapter mirrors iframe keys as cancelable events and honours preventDefault', async () => {
+  const win = Object.assign(new EventTarget(), { focus() {} });
+  const frame = { style: {}, setAttribute() {}, focus() {}, contentWindow: win };
+  Object.defineProperty(frame, 'src', { set() { queueMicrotask(() => frame.onload()); } });
+  const saved = Object.fromEntries(['window', 'document', 'KeyboardEvent', 'fetch'].map((k) => [k, globalThis[k]]));
+  globalThis.window = new EventTarget();
+  globalThis.document = { createElement: () => frame };
+  globalThis.KeyboardEvent = class extends Event { constructor(t, o) { super(t, o); this.code = o.code; this.key = o.key; } };
+  globalThis.fetch = async () => ({ ok: true, status: 200 });
+  const adapter = (await import(new URL('adapter.js', ASSETS).href)).default;
+  await adapter.start({ host: { append() {} }, audio: {}, reportFrame() {}, reportError() {} });
+  let shellSaw = null;
+  window.addEventListener('keydown', (e) => { shellSaw = e; e.preventDefault(); });
+  const real = new KeyboardEvent('keydown', { code: 'Tab', key: 'Tab', cancelable: true });
+  win.dispatchEvent(real);
+  assert.equal(shellSaw?.cancelable, true);
+  assert.equal(real.defaultPrevented, true, 'the real iframe event is cancelled');
+  for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete globalThis[k]; else globalThis[k] = v; }
+});
+
+test('extractZip copes with a zip64 record and locator in front of a valid 32-bit EOCD', async () => {
+  const d = dirOf();
+  mkdirSync(d, { recursive: true });
+  const z = makeZip({ 'a.txt': 'hello' });
+  const eocd = z.length - 22;
+  const rec = Buffer.alloc(56); rec.writeUInt32LE(0x06064b50, 0);
+  const loc = Buffer.alloc(20); loc.writeUInt32LE(0x07064b50, 0);
+  writeFileSync(path.join(d, 'z.zip'), Buffer.concat([z.subarray(0, eocd), rec, loc, z.subarray(eocd)]));
+  assert.deepEqual(await extractZip(path.join(d, 'z.zip'), path.join(d, 'out')), ['a.txt']);
+  writeFileSync(path.join(d, 'z.exe'), Buffer.concat([makePE(), z]));
+  assert.deepEqual(await extractZip(path.join(d, 'z.exe'), path.join(d, 'out2')), ['a.txt']);
+});
+
+test('extractZip refuses an entry that inflates past its declared size', async () => {
+  const d = dirOf();
+  mkdirSync(d, { recursive: true });
+  const z = makeZip({ 'bomb.txt': 'a'.repeat(5000) });
+  const cd = z.length - 22 - (46 + 'bomb.txt'.length); // the only central header; uncompressed size at +24
+  z.writeUInt32LE(10, cd + 24);
+  writeFileSync(path.join(d, 'b.zip'), z);
+  await assert.rejects(extractZip(path.join(d, 'b.zip'), path.join(d, 'out')));
 });
 
 test('extractZip handles a zip appended to an exe', async () => {

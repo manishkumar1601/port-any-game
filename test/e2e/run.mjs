@@ -91,7 +91,7 @@ async function main(argv) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const code = await main(process.argv.slice(2));
-  cleanup();
+  let code = 1;
+  try { code = await main(process.argv.slice(2)); } finally { cleanup(); }
   process.exit(code);
 }

@@ -147,7 +147,7 @@ export function judge(m, t = THRESHOLDS) {
   }
   if (m.memory) {
     const { seconds, growthPctPerMin: g } = m.memory;
-    if (seconds < t.memMinSoakS) add('memory', 'skip', 'soak too short to judge memory');
+    if (seconds < t.memMinSoakS) add('memory', 'skip', `soak too short to judge memory (${seconds.toFixed(0)} s, needs ${t.memMinSoakS} s)`);
     else if (g == null) add('memory', 'skip', `heap not measurable in this browser (${seconds.toFixed(0)} s soak)`);
     else add('memory', g > t.memFail ? 'fail' : g >= t.memWarn ? 'warn' : 'pass', `heap growth ${g.toFixed(1)}%/min over a ${seconds.toFixed(0)} s soak`);
   }
