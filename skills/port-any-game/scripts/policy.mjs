@@ -310,7 +310,7 @@ export function assertLaneAllowed(survey, laneId) {
 
 export function assertTarget(port, target, { password } = {}) {
   if (target === 'local') return;
-  if (target === 'lan') { if (!password) throw new PolicyError('LAN_NO_PASSWORD', 'serving beyond 127.0.0.1 needs --password.'); return; }
+  if (target === 'lan') { if (!password) throw new PolicyError('LAN_NO_PASSWORD', 'serving beyond 127.0.0.1 needs a password (--password-env VAR).'); return; }
   if (target === 'public') {
     if (!isPublicAllowed(port)) throw new PolicyError('PUBLIC_BUNDLED', `a public target needs a bundled-public port with a recorded rights-holder acknowledgement (or catalog-redistributable data). ${ASK}`);
     return;

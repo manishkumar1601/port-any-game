@@ -18,13 +18,17 @@ const MIME = {
 };
 
 // Netlify `_headers`: a pattern at column 0, indented `Name: value` lines below it.
-export function parseHeadersFile(text) {
+export function parseHeadersFile(text, warn = () => {}) {
   const rules = [];
   for (const raw of String(text).replace(/^\uFEFF/, '').split(/\r?\n/)) {
     if (!raw.trim() || raw.trim().startsWith('#')) continue;
     if (/^\s/.test(raw)) {
       const i = raw.indexOf(':');
-      if (i > 0 && rules.length) rules.at(-1).headers[raw.slice(0, i).trim()] = raw.slice(i + 1).trim();
+      if (i > 0 && rules.length) {
+        const k = raw.slice(0, i).trim(), v = raw.slice(i + 1).trim();
+        try { http.validateHeaderName(k); http.validateHeaderValue(k, v); rules.at(-1).headers[k] = v; }
+        catch { warn(`_headers: skipping invalid header line '${raw.trim()}'`); }
+      }
     } else rules.push({ pattern: raw.trim(), headers: {} });
   }
   return rules;
@@ -72,14 +76,14 @@ export function startServer({ root, host = '127.0.0.1', port = 0, password, fixt
   const base = path.resolve(root);
   const fixture = fixtureDir && path.resolve(fixtureDir);
   const rules = [];
-  try { for (const r of parseHeadersFile(readFileSync(path.join(base, '_headers'), 'utf8'))) rules.push({ re: patternRe(r.pattern), headers: r.headers }); } catch { /* none */ }
+  try { for (const r of parseHeadersFile(readFileSync(path.join(base, '_headers'), 'utf8'), log)) rules.push({ re: patternRe(r.pattern), headers: r.headers }); } catch { /* none */ }
 
   const server = http.createServer((req, res) => {
     const pathname = (req.url || '/').split('?')[0].split('#')[0];
     const send = (status, headers = {}, body) => {
-      res.setHeader('X-Robots-Tag', 'noindex, nofollow');
       for (const r of rules) if (r.re.test(pathname)) for (const [k, v] of Object.entries(r.headers)) res.setHeader(k, v);
       for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
+      res.setHeader('X-Robots-Tag', 'noindex, nofollow'); // last: _headers must not weaken it
       res.statusCode = status;
       if (body) body.pipe(res); else res.end();
     };
@@ -98,22 +102,31 @@ export function startServer({ root, host = '127.0.0.1', port = 0, password, fixt
     let status = 200, start = 0, end = r.size - 1;
     const rm = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || ''); // single range only; anything else serves the full file
     if (rm && (rm[1] || rm[2])) {
-      if (rm[1]) { start = Number(rm[1]); if (rm[2]) end = Math.min(Number(rm[2]), end); }
-      else { start = Math.max(0, r.size - Number(rm[2])); }
-      if (start >= r.size || start > end) return send(416, { 'Content-Range': `bytes */${r.size}` });
-      status = 206; headers['Content-Range'] = `bytes ${start}-${end}/${r.size}`;
+      const invalid = rm[1] && rm[2] && Number(rm[2]) < Number(rm[1]); // RFC 9110: ignore the header, serve 200
+      if (!invalid) {
+        if (rm[1]) { start = Number(rm[1]); if (rm[2]) end = Math.min(Number(rm[2]), end); }
+        else { start = Math.max(0, r.size - Number(rm[2])); }
+        if (start >= r.size || start > end) return send(416, { 'Content-Range': `bytes */${r.size}` });
+        status = 206; headers['Content-Range'] = `bytes ${start}-${end}/${r.size}`;
+      }
     }
     headers['Content-Length'] = r.size ? end - start + 1 : 0;
     if (req.method === 'HEAD' || !r.size) return send(status, headers);
     const body = createReadStream(r.file, { start, end });
-    body.on('error', () => res.destroy());
+    res.on('close', () => body.destroy()); // client abort must release the file handle
+    body.on('error', (e) => {
+      if (res.headersSent) return res.destroy();
+      res.removeHeader('Content-Length'); res.removeHeader('Content-Range');
+      res.statusCode = e.code === 'ENOENT' ? 404 : 500;
+      res.end();
+    });
     send(status, headers, body);
   });
   return new Promise((resolveP, reject) => {
     server.once('error', reject);
     server.listen(port, host, () => {
       const { port: p } = server.address();
-      resolveP({ url: `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${p}`, close: () => new Promise((r) => { server.close(() => r()); server.closeAllConnections(); }) });
+      resolveP({ address: server.address().address, url: `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${p}`, close: () => new Promise((r) => { server.close(() => r()); server.closeAllConnections(); }) });
     });
   });
 }

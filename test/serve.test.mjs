@@ -1,7 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import fs, { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { startServer, parseHeadersFile, run } from '../skills/port-any-game/scripts/serve.mjs';
@@ -31,6 +31,8 @@ const raw = (url, p) => new Promise((resolve, reject) => {
 });
 
 test('binds 127.0.0.1 by default', async () => serving({}, async (url) => {
+  const s = await startServer({ root, log: () => {} });
+  try { assert.equal(s.address, '127.0.0.1'); } finally { await s.close(); }
   assert.match(url, /^http:\/\/127\.0\.0\.1:\d+$/);
   const r = await fetch(url + '/');
   assert.equal(r.status, 200);
@@ -144,7 +146,69 @@ test('cli: usage and policy refusals', async () => {
   [o, i] = io();
   delete process.env.PAG_TEST_PW;
   assert.equal(await run([root, '--lan', '--password-env', 'PAG_TEST_PW'], i), 4);
-  assert.match(o.text, /--password/);
+  assert.match(o.text, /--password-env/);
   [o, i] = io();
   assert.equal(await run([root, '--port', 'x'], i), 2);
 });
+
+test('_headers cannot override X-Robots-Tag', async () => {
+  const d = path.join(base, 'robots'); mkdirSync(d);
+  writeFileSync(path.join(d, 'index.html'), 'x');
+  writeFileSync(path.join(d, '_headers'), '/*\n  X-Robots-Tag: all\n');
+  const s = await startServer({ root: d, log: () => {} });
+  try {
+    for (const p of ['/', '/nope']) assert.equal((await fetch(s.url + p)).headers.get('x-robots-tag'), 'noindex, nofollow');
+  } finally { await s.close(); }
+});
+
+test('aborted download releases the file handle', async () => {
+  writeFileSync(path.join(root, 'big.bin'), Buffer.alloc(16 * 1024 * 1024));
+  const open = fs.open, close = fs.close;
+  let opened = 0, closed = 0;
+  fs.open = (...a) => { if (String(a[0]).endsWith('big.bin')) opened++; return open.apply(fs, a); };
+  fs.close = (...a) => { closed++; return close.apply(fs, a); };
+  const s = await startServer({ root, log: () => {} });
+  try {
+    const u = new URL(s.url);
+    await new Promise((resolve, reject) => {
+      const req = http.get({ host: u.hostname, port: u.port, path: '/big.bin' }, (r) => r.once('data', () => { req.destroy(); resolve(); }));
+      req.on('error', () => {});
+    });
+    const until = Date.now() + 5000;
+    while (closed < opened && Date.now() < until) await new Promise((r) => setTimeout(r, 20));
+    assert.equal(opened, 1);
+    assert.equal(closed, opened);
+  } finally { fs.open = open; fs.close = close; await s.close(); }
+});
+
+test('malformed _headers lines are skipped with a warning', async () => {
+  const d = path.join(base, 'badhdr'); mkdirSync(d);
+  writeFileSync(path.join(d, 'index.html'), 'x');
+  writeFileSync(path.join(d, '_headers'), '/*\n  Bad Name: x\n  X-Good: ok\n');
+  const logs = [];
+  const s = await startServer({ root: d, log: (m) => logs.push(m) });
+  try {
+    const r = await fetch(s.url + '/');
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get('x-good'), 'ok');
+    assert.match(logs.join('\n'), /invalid header/);
+  } finally { await s.close(); }
+});
+
+test('symlink escaping the root is refused', async (t) => {
+  const outside = path.join(base, 'outside'); mkdirSync(outside);
+  writeFileSync(path.join(outside, 'o.txt'), 'SECRET');
+  try { symlinkSync(outside, path.join(root, 'link'), process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (e) { return t.skip(`cannot create symlink: ${e.code}`); }
+  await serving({}, async (url) => {
+    const r = await fetch(url + '/link/o.txt');
+    assert.equal(r.status, 404);
+    assert.ok(!(await r.text()).includes('SECRET'));
+  });
+});
+
+test('reversed range is ignored (200 full)', async () => serving({}, async (url) => {
+  const r = await fetch(url + '/ten.bin', { headers: { range: 'bytes=5-2' } });
+  assert.equal(r.status, 200);
+  assert.equal(await r.text(), '0123456789');
+}));
