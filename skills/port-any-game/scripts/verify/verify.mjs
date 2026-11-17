@@ -32,6 +32,7 @@ const PAGE = {
     return { state: s?.state ?? null, lastError: s?.stats.lastError ?? null, gameFrames: s?.stats.gameFrames ?? 0, inputEvents: s?.stats.inputEvents ?? 0, frame: v?.sample() ?? null, audio: v?.audio() ?? null };
   },
   soak: () => ({ heap: window.__pagVerify?.heap() ?? null, gameFrames: window.__shell?.stats.gameFrames ?? 0 }),
+  frames: () => ({ state: window.__shell?.state ?? null, gameFrames: window.__shell?.stats.gameFrames ?? 0 }),
   play: () => {
     const r = document.getElementById('play')?.getBoundingClientRect();
     return r?.width ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null;
@@ -72,6 +73,20 @@ async function waitState(d, want, timeoutS) {
     if (s && [...want, 'error', 'needs-files'].includes(s.state)) return { ...s, secs };
     if (secs > timeoutS) return { ...s, secs, timedOut: timeoutS };
     await sleep(100);
+  }
+}
+
+// R46: frame sampling starts at the lane's first game frame (start() may resolve before anything is painted). Polls
+// `poll()` -> {state, gameFrames} (a throwing or null poll means "not yet") until gameFrames > 0, the shell leaves
+// 'running', or capMs passes. Returns {secs, framed}; it never hangs, and at the cap the caller samples as before.
+export async function waitFirstFrame(poll, { capMs = T.firstFrameCapS * 1000, everyMs = 50 } = {}) {
+  const t0 = Date.now();
+  for (;;) {
+    const s = await Promise.resolve().then(poll).catch(() => null);
+    const secs = (Date.now() - t0) / 1000;
+    if (s?.gameFrames > 0) return { secs, framed: true };
+    if ((s && s.state !== 'running') || secs * 1000 >= capMs) return { secs, framed: false };
+    await sleep(everyMs);
   }
 }
 
@@ -126,6 +141,7 @@ async function runBrowser(browser, o) {
     await d.click(at.x, at.y); // trusted click: the shell creates the AudioContext inside it
     return waitState(d, ['running'], 60);
   };
+  const firstFrame = () => waitFirstFrame(() => call(d, PAGE.frames)); // R46
   let unsupported = null;
 
   const steps = async () => {
@@ -142,9 +158,12 @@ async function runBrowser(browser, o) {
     m.env = await call(d, PAGE.env);
     if (o.shell.needs_coi && !m.env.coi) m.checks.push({ name: 'isolation', status: 'fail', detail: 'needs_coi, but the page is not cross-origin isolated' });
 
-    // 6-7, 9: Play, then 10 s of samples (frames, game frame rate and stalls, audio).
+    // 6-7, 9: Play, then (R46) from the first game frame on, 10 s of samples (frames, game frame rate and stalls, audio).
     m.shell = await play();
     if (m.shell.state !== 'running') return;
+    const ff = await firstFrame();
+    if (ff.framed) m.ready.firstFrameS = (m.shell.secs ?? 0) + ff.secs;
+    else if (ff.secs >= T.firstFrameCapS) m.ready.noFirstFrameS = T.firstFrameCapS;
     await shot('play');
     m.frames = [];
     m.diffs = [];
@@ -218,6 +237,7 @@ async function runBrowser(browser, o) {
     if (o.soakSec > 0) {
       m.shell = await play();
       if (m.shell.state !== 'running') return;
+      await firstFrame(); // R46: start-up is not a stall
       const heap = [];
       const ts = Date.now();
       m.loop.soak = [];
@@ -242,7 +262,7 @@ async function runBrowser(browser, o) {
         await d.open(`${o.url}&verify_stage=${encodeURIComponent(name)}`);
         let s = await waitState(d, ['ready'], T.readyCachedS);
         if (s.state === 'ready') s = await play();
-        if (s.state === 'running') await sleep(1000);
+        if (s.state === 'running') { await firstFrame(); await sleep(1000); }
         const t = await call(d, PAGE.tick);
         const px = pixels(t.frame);
         m.stages.push({ name, state: t.state, frame: px && frameStats(px, t.frame.w, t.frame.h) });

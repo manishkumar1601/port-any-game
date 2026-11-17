@@ -97,6 +97,17 @@ test('lane-test throw fails page error', { skip }, async () => {
   assert.match(check(r, 'errors').detail, /thrown in the first frame/);
 });
 
+// R46: verify waits for the first game frame, capped; a lane that never paints is still judged, not hung or masked.
+test('lane-test never-painting lane fails blank and fps after the first-frame cap', { skip }, async () => {
+  const t0 = Date.now();
+  const { r } = await verifyMode('mode=never');
+  assert.equal(r.status, 'fail');
+  assert.equal(check(r, 'blank').status, 'fail', failing(r));
+  assert.equal(check(r, 'fps').status, 'fail', failing(r));
+  assert.match(check(r, 'ready').detail, /no game frame within 10 s of Play/);
+  assert.ok(Date.now() - t0 < 120000, 'bounded');
+});
+
 test('lane-test silent warns audio', { skip }, async () => {
   const { r } = await verifyMode('mode=silent');
   assert.equal(check(r, 'audio').status, 'warn', failing(r));

@@ -169,18 +169,25 @@ test('frame hook counts one frame per distinct timestamp, however many rAF consu
 
 // Runs the adapter against a fake iframe that behaves like a browser's: one contentWindow object for the iframe's whole
 // life; each navigation swaps its document, and listeners live on the current document's global (the old ones are gone).
-// fetch decides the HEAD result.
+// fetch decides the HEAD result. Like Chrome, appending the iframe (no src yet) fires a synchronous load for the initial
+// about:blank document (no meta refresh, so it looks like a finished entry); setting src then loads the meta-refresh stub.
 async function startAdapter(headStatus = 200) {
   const newDoc = (refresh) => ({ target: new EventTarget(), querySelector: () => (refresh ? {} : null) });
   const win = {
-    document: newDoc(true), // the first document is the meta-refresh stub
+    document: newDoc(false),
+    location: { href: 'about:blank' },
     focusCalls: 0,
     focus() { this.focusCalls++; },
     addEventListener(...a) { this.document.target.addEventListener(...a); },
     dispatchEvent(e) { return this.document.target.dispatchEvent(e); },
   };
   const frame = Object.assign(new EventTarget(), { style: {}, setAttribute() {}, focus() {}, contentWindow: win });
-  Object.defineProperty(frame, 'src', { set() { queueMicrotask(() => frame.dispatchEvent(new Event('load'))); } });
+  Object.defineProperty(frame, 'src', {
+    set(v) {
+      queueMicrotask(() => { win.location.href = `http://127.0.0.1/${v}`; win.document = newDoc(true); frame.dispatchEvent(new Event('load')); });
+    },
+  });
+  const host = { append() { frame.dispatchEvent(new Event('load')); } }; // the synchronous about:blank load
   const saved = Object.fromEntries(['window', 'document', 'KeyboardEvent', 'fetch'].map((k) => [k, globalThis[k]]));
   globalThis.window = new EventTarget();
   globalThis.document = { createElement: () => frame };
@@ -189,7 +196,7 @@ async function startAdapter(headStatus = 200) {
   const restore = () => { for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete globalThis[k]; else globalThis[k] = v; } };
   const adapter = (await import(new URL('adapter.js', ASSETS).href)).default;
   // start() resolves only after the real entry loads; the fake frame loads the meta-refresh stub first and stops there.
-  const started = adapter.start({ host: { append() {} }, audio: {}, reportFrame() {}, reportError() {} });
+  const started = adapter.start({ host, audio: {}, reportFrame() {}, reportError() {} });
   started.catch(() => restore());
   if (headStatus !== 200) await started;
   await new Promise((r) => setTimeout(r, 5)); // the stub's load event
@@ -225,6 +232,20 @@ test('adapter mirrors iframe keys as cancelable events on the redirected documen
     assert.equal(p.real.defaultPrevented, true, 'the real iframe event is cancelled');
     a.frame.dispatchEvent(new Event('load')); // a repeated load event for the same document adds nothing
     assert.equal(press('keydown').seen.length, 1);
+  } finally { a.restore(); }
+});
+
+test('adapter start() ignores the initial about:blank load (no early resolve or focus)', async () => {
+  const a = await startAdapter(); // append fired the about:blank load; the meta-refresh stub has loaded too
+  try {
+    let resolved = false;
+    a.started.then(() => { resolved = true; });
+    await new Promise((r) => setTimeout(r, 5));
+    assert.equal(resolved, false, 'about:blank is not the game');
+    assert.equal(a.win.focusCalls, 0);
+    a.navigate();
+    await a.started;
+    assert.equal(a.win.focusCalls, 1);
   } finally { a.restore(); }
 });
 

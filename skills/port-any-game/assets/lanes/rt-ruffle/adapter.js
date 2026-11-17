@@ -40,10 +40,16 @@ export default {
     ctx.host.append(player);
     await player.load({ data: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), autoplay: 'on', preferredRenderer: 'webgl', letterbox: 'on', unmuteOverlay: 'hidden' });
     let panicked = false;
+    // R46: count only frames Ruffle has rendered. Ruffle 0.7.1 shows its canvas when the movie's metadata arrives
+    // (readyState 2 = Loaded; before that the canvas container is display:none behind the splash). Counting starts
+    // one tick after Loaded is first seen, so Ruffle's own rAF tick has run (and drawn the movie) at least once since,
+    // whichever of the two rAF callbacks runs first in a frame.
+    let shown = false;
     const tick = () => {
       raf = requestAnimationFrame(tick);
       if (!panicked && player.shadowRoot?.querySelector('#panic')) { panicked = true; ctx.reportError(new Error('Ruffle panicked (see the player for details)')); }
-      if (running && !panicked && player.ruffle?.().is_playing?.() !== false) { frames++; ctx.reportFrame(); }
+      if (running && !panicked && shown && player.ruffle?.().is_playing?.() !== false) { frames++; ctx.reportFrame(); }
+      shown ||= player.readyState === 2;
     };
     raf = requestAnimationFrame(tick);
   },

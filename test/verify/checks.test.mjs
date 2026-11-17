@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { frameStats, meanAbsDiff, judge, isCrossOrigin, longestStall, heapGrowth } from '../../skills/port-any-game/scripts/verify/checks.mjs';
+import { waitFirstFrame } from '../../skills/port-any-game/scripts/verify/verify.mjs';
 
 const W = 64;
 const H = 48;
@@ -112,6 +113,40 @@ test('judge loop: a gameFrames stall over 2 s fails, in the sample window or the
   assert.equal(loop({ window: series([1, 2, 3]), soak: series([5, 6, 6, 6, 6, 7], 1) }), 'fail', 'the soak is checked too (3 s at 1 s spacing)');
   assert.equal(loop({ window: series([1, 2, 3]), soak: series([5, 6, 6, 6, 7, 8], 0.5) }), 'pass');
   assert.match(judge({ loop: { window: series([1, 2]), soak: series([5, 5, 5, 5], 1) } }).checks[0].detail, /soak/);
+});
+
+test('waitFirstFrame (R46): sampling starts at the first game frame, never hangs', async () => {
+  const polls = (list) => { let i = 0; return () => list[Math.min(i++, list.length - 1)]; };
+  const run = (s) => ({ state: 'running', gameFrames: s });
+  let r = await waitFirstFrame(polls([run(0), run(0), run(3)]), { capMs: 5000, everyMs: 1 });
+  assert.equal(r.framed, true);
+  assert.ok(r.secs < 1);
+  // A lane that never paints: returns at the cap (not hung), and the caller samples as before.
+  const t0 = Date.now();
+  r = await waitFirstFrame(() => run(0), { capMs: 150, everyMs: 10 });
+  assert.equal(r.framed, false);
+  assert.ok(Date.now() - t0 >= 150 && Date.now() - t0 < 1500, `${Date.now() - t0} ms`);
+  // A busy page (the poll throws or yields null) is "not yet"; leaving 'running' (an error) ends the wait at once.
+  r = await waitFirstFrame(() => { throw new Error('busy'); }, { capMs: 100, everyMs: 5 });
+  assert.equal(r.framed, false);
+  assert.equal((await waitFirstFrame(polls([null, null, run(1)]), { capMs: 5000, everyMs: 1 })).framed, true);
+  let n = 0;
+  r = await waitFirstFrame(() => { if (n++ < 2) throw new Error('busy'); return run(2); }, { capMs: 5000, everyMs: 1 });
+  assert.equal(r.framed, true);
+  r = await waitFirstFrame(() => ({ state: 'error', gameFrames: 0 }), { capMs: 5000, everyMs: 1 });
+  assert.equal(r.framed, false);
+  assert.ok(r.secs < 1, 'an error state ends the wait');
+});
+
+test('judge ready (R46): the first game frame counts against the ready budget', () => {
+  const ready = (o) => judge({ ready: { firstS: 1, cachedS: 1, budget: 10, ...o } }).checks.find((c) => c.name === 'ready');
+  assert.equal(ready({ firstFrameS: 2.5 }).status, 'pass');
+  assert.match(ready({ firstFrameS: 2.5 }).detail, /first game frame 2\.50 s after Play/);
+  assert.equal(ready({ firstFrameS: 12 }).status, 'warn');
+  // No frame within the cap: noted, but the frame checks (blank, fps) judge the run, not ready.
+  const none = ready({ firstFrameS: null, noFirstFrameS: 10 });
+  assert.equal(none.status, 'pass');
+  assert.match(none.detail, /no game frame within 10 s of Play/);
 });
 
 test('judge memory: < 5 %/min pass, 5-10 warn, > 10 fail, unmeasurable is skip', () => {

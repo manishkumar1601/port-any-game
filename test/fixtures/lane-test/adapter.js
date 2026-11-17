@@ -5,6 +5,7 @@
 //   frozen  draws one frame, then the picture never changes (frames still reported)
 //   throw   throws in the first frame (uncaught); with &throw=start it throws inside start() instead
 //   silent  like ok, without audio
+//   never   start() resolves with a canvas on screen, but nothing is ever painted or reported (R46)
 // Extra flags, combinable with any mode:
 //   &wide=1  adds a 1000 px wide strip: overflows a phone viewport, not a desktop one
 //   &post=1  sends one same-origin POST with a body at start (a BYO privacy violation)
@@ -57,6 +58,7 @@ export default {
       osc.connect(gain).connect(audio.destination);
       osc.start();
     }
+    if (mode === 'never') return;
     running = true;
     const frame = (t) => {
       if (running) {

@@ -14,6 +14,7 @@ export const THRESHOLDS = {
   memFail: 10, // ...> 10 fail
   memMinSoakS: 30, // R37: shorter soaks only see warm-up growth, so memory is not judged
   heapNoiseBytes: 1024 * 1024, // heap growth under 1 MiB over the soak is noise
+  firstFrameCapS: 10, // R46: frame sampling waits at most this long after Play for the lane's first game frame
   readyFirstS: 120, // first load (BYO import or download) times out after this
   readyCachedS: 30, // a reload (files cached) times out after this
 };
@@ -85,9 +86,12 @@ export function judge(m, t = THRESHOLDS) {
   const add = (name, status, detail) => checks.push({ name, status, detail });
 
   if (m.ready) {
-    const { firstS, cachedS, budget, timedOut, mbps } = m.ready;
-    const d = `first load ${f2(firstS)} s${mbps ? ` (${mbps.toFixed(1)} MB/s)` : ''}${cachedS != null ? `, reload ${f2(cachedS)} s` : ''}; budget ${budget} s`;
-    add('ready', timedOut ? 'fail' : cachedS > budget ? 'warn' : 'pass', timedOut ? `not ready after ${timedOut} s; ${d}` : d);
+    const { firstS, cachedS, budget, timedOut, mbps, firstFrameS, noFirstFrameS } = m.ready;
+    // R46: the first game frame after Play counts against the budget; none within the cap is noted here and left to
+    // the frame checks (blank, fps) to judge.
+    const frame = firstFrameS != null ? `; first game frame ${f2(firstFrameS)} s after Play` : noFirstFrameS ? `; no game frame within ${noFirstFrameS} s of Play` : '';
+    const d = `first load ${f2(firstS)} s${mbps ? ` (${mbps.toFixed(1)} MB/s)` : ''}${cachedS != null ? `, reload ${f2(cachedS)} s` : ''}${frame}; budget ${budget} s`;
+    add('ready', timedOut ? 'fail' : cachedS > budget || firstFrameS > budget ? 'warn' : 'pass', timedOut ? `not ready after ${timedOut} s; ${d}` : d);
   }
   if (m.shell) {
     const { state, lastError, status, timedOut } = m.shell;

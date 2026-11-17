@@ -37,6 +37,8 @@ export default {
     await new Promise((resolve) => {
       const timer = setTimeout(resolve, 10000);
       f.addEventListener('load', () => {
+        // Chrome fires a synchronous load for the initial about:blank document on append, before src navigates.
+        if (f.contentWindow.location.href === 'about:blank') return;
         hook();
         if (f.contentWindow.document.querySelector('meta[http-equiv="refresh" i]')) return; // the redirect stub
         clearTimeout(timer);
