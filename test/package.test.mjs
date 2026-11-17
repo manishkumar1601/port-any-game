@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import net from 'node:net';
 import http from 'node:http';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -16,7 +16,7 @@ const { listZip } = await import('../skills/port-any-game/scripts/lib/archive.mj
 
 let n = 0;
 // A finished port: port.json plus a hand-made dist/ shaped like pack output.
-function makePort({ mode = 'byo', coi = true, lane = 'lane-test', dist = true } = {}) {
+function makePort({ mode = 'byo', coi = true, lane = 'lane-test', dist = true, caseFallback = false } = {}) {
   const dir = path.join(base, `port-${++n}`);
   mkdirSync(dir, { recursive: true });
   writeFileSync(path.join(dir, 'port.json'), JSON.stringify({ id: `test-game-${n}`, name: 'Test Game', lane, data: { mode } }));
@@ -26,7 +26,9 @@ function makePort({ mode = 'byo', coi = true, lane = 'lane-test', dist = true } 
     writeFileSync(path.join(d, 'index.html'), '<h1>hi</h1>');
     writeFileSync(path.join(d, 'ten.bin'), '0123456789');
     writeFileSync(path.join(d, 'game', 'level.dat'), 'bytes');
-    writeFileSync(path.join(d, 'shell.json'), JSON.stringify({ needs_coi: coi, data: { mode } }));
+    mkdirSync(path.join(d, 'img'), { recursive: true });
+    writeFileSync(path.join(d, 'img', 'title.png'), 'png');
+    writeFileSync(path.join(d, 'shell.json'), JSON.stringify({ needs_coi: coi, data: { mode }, ...(caseFallback ? { serve: { caseFallback: true } } : {}) }));
     writeFileSync(path.join(d, '_headers'), `/*\n${coi ? '  Cross-Origin-Opener-Policy: same-origin\n  Cross-Origin-Embedder-Policy: require-corp\n' : ''}  Cache-Control: no-cache\n`);
   }
   return dir;
@@ -48,10 +50,10 @@ test('package writes launchers and zip', async () => {
   assert.equal(r.dir, path.join(dir, 'package', `${id}-portable`));
   assert.equal(r.zipPath, path.join(dir, 'package', `${id}.zip`));
   for (const f of ['Play-Windows.bat', 'Play-macOS.command', 'Play-Linux.sh', 'serve-windows.ps1', 'serve-standalone.mjs', 'launch.json', 'headers.json', 'README.txt', 'dist/index.html', 'dist/game/level.dat']) assert.ok(existsSync(path.join(r.dir, f)), f);
-  assert.deepEqual(JSON.parse(readFileSync(path.join(r.dir, 'launch.json'), 'utf8')), { port: stablePort(id), needs_coi: true });
+  assert.deepEqual(JSON.parse(readFileSync(path.join(r.dir, 'launch.json'), 'utf8')), { port: stablePort(id), needs_coi: true, case_fallback: false });
   const hj = JSON.parse(readFileSync(path.join(r.dir, 'headers.json'), 'utf8'));
   assert.deepEqual(hj, [{ pattern: '/*', headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp', 'Cache-Control': 'no-cache' } }]);
-  assert.equal(readFileSync(path.join(r.dir, 'Play-Windows.bat'), 'utf8'), '@echo off\r\npowershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0serve-windows.ps1"\r\n');
+  assert.equal(readFileSync(path.join(r.dir, 'Play-Windows.bat'), 'utf8'), '@echo off\r\npowershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0serve-windows.ps1"\r\nif errorlevel 1 pause\r\n');
   assert.ok(!readFileSync(path.join(r.dir, 'Play-Linux.sh'), 'utf8').includes('\r'), 'LF in sh');
   assert.match(readFileSync(path.join(r.dir, 'Play-Linux.sh'), 'utf8'), /^#!\/bin\/sh\n/);
   const names = listZip(readFileSync(r.zipPath)).map((e) => e.name);
@@ -100,9 +102,9 @@ function launch(cmd, args, cwd) {
   });
   return { child, ready };
 }
-const withPort = async (r) => {
+const withPort = async (r, extra = {}) => {
   const port = await freePort();
-  writeFileSync(path.join(r.dir, 'launch.json'), JSON.stringify({ port, needs_coi: true }));
+  writeFileSync(path.join(r.dir, 'launch.json'), JSON.stringify({ port, needs_coi: true, ...extra }));
   return port;
 };
 
@@ -162,10 +164,69 @@ test('Windows launcher serves headers', { skip: process.platform !== 'win32' && 
     assert.ok([400, 403, 404].includes(await rawStatus(port, '/..%5Claunch.json')), '/..%5Claunch.json refused (HttpListener may answer before our code)');
     assert.ok([400, 403, 404].includes(await rawStatus(port, '/../launch.json')), '/../launch.json refused (HttpListener may answer before our code)');
     assert.equal((await fetch(u + '/game/')).status, 404);
+    assert.ok([400, 403, 404].includes(await rawStatus(port, '/a%3Cb')), 'invalid path chars refused');
+    assert.ok([400, 403, 404].includes(await rawStatus(port, '/index.html::$DATA')), 'ADS refused');
   } finally {
     spawnSync('taskkill', ['/PID', String(l.child.pid), '/T', '/F']);
     await new Promise((res) => setTimeout(res, 500));
     const still = await fetch(`http://127.0.0.1:${port}/`).then(() => true, () => false);
     assert.equal(still, false, 'no powershell left serving');
   }
+});
+
+test('launch.json carries case_fallback and serve-standalone honours it', async () => {
+  const r = await packagePortable(makePort({ caseFallback: true }));
+  assert.equal(JSON.parse(readFileSync(path.join(r.dir, 'launch.json'), 'utf8')).case_fallback, true);
+  const port = await withPort(r, { case_fallback: true });
+  const l = launch(process.execPath, ['serve-standalone.mjs'], r.dir);
+  try {
+    await l.ready;
+    const res = await fetch(`http://127.0.0.1:${port}/Img/Title.PNG`);
+    assert.equal(res.status, 200);
+    assert.equal(await res.text(), 'png');
+    assert.equal((await fetch(`http://127.0.0.1:${port}/Img/nope.PNG`)).status, 404);
+  } finally { l.child.kill(); }
+  const strict = await packagePortable(makePort());
+  const p2 = await withPort(strict);
+  const l2 = launch(process.execPath, ['serve-standalone.mjs'], strict.dir);
+  try {
+    await l2.ready;
+    // exact-case lookups stay exact where the disk is case-sensitive; Windows/macOS disks fold anyway
+    if (process.platform === 'linux') assert.equal((await fetch(`http://127.0.0.1:${p2}/Img/Title.PNG`)).status, 404);
+  } finally { l2.child.kill(); }
+});
+
+test('standalone rejects alternate data streams on Windows', { skip: process.platform !== 'win32' && 'windows only' }, async () => {
+  const r = await packagePortable(makePort());
+  const port = await withPort(r);
+  const l = launch(process.execPath, ['serve-standalone.mjs'], r.dir);
+  try {
+    await l.ready;
+    assert.equal(await rawStatus(port, '/index.html::$DATA'), 400);
+    assert.equal(await rawStatus(port, '/index.html:stream'), 400);
+  } finally { l.child.kill(); }
+});
+
+test('zip is skipped with a clear message when 32-bit limits would be exceeded', async () => {
+  const dir = makePort();
+  for (const limits of [{ file: 5, total: 0xffffffff, entries: 65535 }, { file: 0xffffffff, total: 1000, entries: 65535 }, { file: 0xffffffff, total: 0xffffffff, entries: 3 }]) {
+    const r = await packagePortable(dir, { limits });
+    assert.equal(r.zipPath, null);
+    assert.ok(r.warnings.some((w) => /package too large for a .zip; share the folder instead/.test(w)));
+    assert.ok(existsSync(path.join(r.dir, 'dist', 'index.html')), 'folder kept');
+    assert.ok(!existsSync(path.join(dir, 'package', `${JSON.parse(readFileSync(path.join(dir, 'port.json'), 'utf8')).id}.zip`)), 'no zip');
+  }
+  const { o, io: i } = io();
+  assert.equal(await run([makePort()], i), 0);
+  assert.match(o.out, /Zip: /);
+});
+
+test('a failing build leaves neither a stale zip nor a partial folder', async () => {
+  const dir = makePort();
+  const r = await packagePortable(dir);
+  assert.ok(existsSync(r.zipPath));
+  await assert.rejects(packagePortable(dir, { afterCopy: () => { throw new Error('boom'); } }), /boom/);
+  assert.ok(!existsSync(r.zipPath), 'stale zip removed');
+  const left = readdirSync(path.join(dir, 'package'));
+  assert.ok(!left.some((f) => f.startsWith('.tmp-')), `temp left behind: ${left}`);
 });

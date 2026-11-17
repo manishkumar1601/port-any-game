@@ -39,7 +39,7 @@ function Resolve-Request([string]$rawPath) {
     if ($d -eq '..' -or $d.Contains([string][char]0) -or $d.Contains('\') -or $d.Contains(':')) { return 400 }
     $cur = Join-Path $cur $d
   }
-  $full = [IO.Path]::GetFullPath($cur)
+  try { $full = [IO.Path]::GetFullPath($cur) } catch { return 400 }
   if ($full -ne $dist -and -not $full.StartsWith($dist + '\', [StringComparison]::OrdinalIgnoreCase)) { return 400 }
   if (Test-Path -LiteralPath $full -PathType Container) { $full = Join-Path $full 'index.html' }
   if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { return 404 }
@@ -86,6 +86,6 @@ while ($listener.IsListening) {
         }
       } finally { $fs.Dispose() }
     }
-  } catch { } # client aborted mid-response (normal for media seeking)
+  } catch { try { if (-not $res.HeadersSent) { $res.StatusCode = 400 } } catch { } } # client abort, or a request we could not parse
   finally { try { $res.Close() } catch { } }
 }

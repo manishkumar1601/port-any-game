@@ -2,14 +2,14 @@
 // Reads launch.json {port, needs_coi} and headers.json [{pattern, headers}] beside it; serves ./dist on 127.0.0.1.
 import http from 'node:http';
 import path from 'node:path';
-import { createReadStream, readFileSync, realpathSync, statSync } from 'node:fs';
+import { createReadStream, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dist = path.join(here, 'dist');
 const readJson = (f, d) => { try { return JSON.parse(readFileSync(path.join(here, f), 'utf8').replace(/^﻿/, '')); } catch { return d; } };
-const { port } = readJson('launch.json', {});
+const { port, case_fallback: caseFallback } = readJson('launch.json', {});
 const escapeRe = (s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
 const rules = readJson('headers.json', []).map((r) => ({ re: new RegExp(`^${r.pattern.split('*').map(escapeRe).join('.*')}$`), headers: r.headers }));
 
@@ -24,15 +24,22 @@ const MIME = {
 const inside = (root, p) => { const r = path.relative(root, p); return r === '' || (!r.startsWith('..') && !path.isAbsolute(r)); };
 const statOf = (p) => { try { return statSync(p); } catch { return null; } };
 
-// ponytail: exact-case lookups (case-sensitive disks only); serve.mjs's caseFallback is not mirrored here.
 function resolve(rawPath) {
   let cur = dist;
   for (const s of rawPath.split('/')) {
     if (!s || s === '.') continue;
     let d;
     try { d = decodeURIComponent(s); } catch { return { status: 400 }; }
-    if (d === '..' || d.includes('\0') || d.includes('\\') || d.includes('/')) return { status: 400 };
-    cur = path.join(cur, d);
+    if (d === '..' || d.includes('\0') || d.includes('\\') || d.includes('/') || (process.platform === 'win32' && d.includes(':'))) return { status: 400 };
+    let next = path.join(cur, d);
+    if (caseFallback && !statOf(next)) { // per-segment case-insensitive lookup, like serve.mjs caseFallback
+      let names = [];
+      try { names = readdirSync(cur); } catch { /* 404 below */ }
+      const want = d.normalize('NFC').toLowerCase();
+      const hit = names.find((n) => n.normalize('NFC').toLowerCase() === want);
+      if (hit) next = path.join(cur, hit);
+    }
+    cur = next;
   }
   if (!inside(dist, cur)) return { status: 400 };
   let st = statOf(cur);
