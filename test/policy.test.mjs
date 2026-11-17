@@ -9,10 +9,10 @@ import { checkToolUse, assertLaneAllowed, assertTarget, PolicyError } from '../s
 const base = mkdtempSync(path.join(tmpdir(), 'pag-policy-'));
 after(() => rmSync(base, { recursive: true, force: true }));
 
-function port(name, mode = 'byo') {
+function port(name, mode = 'byo', extra = {}) {
   const root = path.join(base, name);
   for (const d of ['game', 'work', 'build', 'lane']) mkdirSync(path.join(root, d), { recursive: true });
-  writeFileSync(path.join(root, 'port.json'), JSON.stringify({ schema: 'port-any-game/port@1', id: name, name, lane: 'web-extract', data: { mode }, tools: {}, acks: [], created_at: '2026-11-17T00:00:00Z' }));
+  writeFileSync(path.join(root, 'port.json'), JSON.stringify({ schema: 'port-any-game/port@1', id: name, name, lane: 'web-extract', data: { mode, ...extra.data }, tools: {}, acks: extra.acks ?? [], created_at: '2026-11-17T00:00:00Z' }));
   return root;
 }
 const sh = (command, cwd) => checkToolUse({ tool: 'shell', command, cwd });
@@ -56,7 +56,7 @@ test('allows git add lane/', () => {
 });
 
 test('allows git add game/ in bundled-public port', () => {
-  const root = port('p3', 'bundled-public');
+  const root = port('p3', 'bundled-public', { acks: [{ id: 'ACK_RIGHTS_HOLDER', at: '2026-11-17T00:00:00Z' }] });
   assert.equal(sh('git add game/', root).deny, false);
   assert.equal(sh('wrangler pages deploy build', root).deny, false);
 });
@@ -116,5 +116,111 @@ test('assertTarget lan without password throws', () => {
   assertTarget(p, 'lan', { password: 'x' });
   assertTarget(p, 'local');
   assert.throws(() => assertTarget({ data: { mode: 'bundled' } }, 'public'), (e) => e.code === 'PUBLIC_BUNDLED');
-  assertTarget({ data: { mode: 'bundled-public' } }, 'public');
+  assert.throws(() => assertTarget({ data: { mode: 'bundled-public' } }, 'public'), (e) => e.code === 'PUBLIC_BUNDLED');
+  assertTarget({ data: { mode: 'bundled-public' }, acks: [{ id: 'ACK_RIGHTS_HOLDER', at: 'x' }] }, 'public');
+  assertTarget({ data: { mode: 'bundled-public', redistributable: true } }, 'public');
+});
+
+const git = (cwd, ...a) => spawnSync('git', a, { cwd, encoding: 'utf8' });
+const hasGit = git(base, '--version').status === 0;
+const env = (k, v, fn) => { const o = process.env[k]; process.env[k] = v; try { return fn(); } finally { if (o === undefined) delete process.env[k]; else process.env[k] = o; } };
+const fwd = (p) => p.replaceAll('\\', '/');
+
+test('bundled-public without ACK_RIGHTS_HOLDER is not public', () => {
+  const root = port('q1', 'bundled-public');
+  const r = sh('git add game/', root);
+  assert.equal(r.deny, true);
+  assert.match(r.reason, /Ask the user\. Do not edit port\.json yourself/);
+  assert.equal(sh('wrangler deploy', root).deny, true);
+});
+
+test('bundled-public with ACK_RIGHTS_HOLDER is public', () => {
+  const a = port('q2', 'bundled-public', { acks: [{ id: 'ACK_RIGHTS_HOLDER', at: '2026-11-17T00:00:00Z' }] });
+  const b = port('q3', 'bundled-public', { data: { redistributable: true } });
+  for (const r of [a, b]) { assert.equal(sh('git add game/', r).deny, false); assert.equal(sh('vercel --prod', r).deny, false); }
+});
+
+test('write tool to port.json is denied', () => {
+  const root = port('q4');
+  assert.equal(checkToolUse({ tool: 'write', path: path.join(root, 'port.json'), cwd: base }).code, 'PORT_JSON_WRITE');
+  assert.equal(checkToolUse({ tool: 'write', path: 'port.json', cwd: root }).deny, true);
+  assert.equal(sh('echo {} > port.json', root).deny, true);
+  assert.equal(sh('sed -i s/byo/bundled-public/ port.json', root).deny, true);
+  assert.equal(sh('cat port.json', root).deny, false);
+});
+
+test('refuse words only as commands or executable-like tokens', () => {
+  const heredoc = 'git commit -m "$(cat <<\'EOF\'\nfix: say "no" to crack loaders and steamless\nEOF\n)"';
+  for (const c of ['grep -rn crack docs', 'cat UNLICENSE', 'ls /home/jane.goldberg/project', 'git add docs/crack-notes.md',
+    'gh pr create --title "guard" --body "refuses crack loaders and steamless"', 'git commit -m "fix: refuse steamless"', heredoc]) {
+    assert.equal(sh(c, base).deny, false, c);
+  }
+  for (const c of ['crack game.exe', 'goldberg.exe', 'python unlicense.py a.exe', 'copy crack\\loader.exe .', 'run nocd.exe', 'wine no-cd.exe', 'steamless', 'bash -ec "steamless.exe x"']) {
+    assert.equal(sh(c, base).code, 'CIRCUMVENTION', c);
+  }
+});
+
+test('expands ~, $HOME and %USERPROFILE%', () => {
+  const home = path.join(base, 'home');
+  const root = path.join(home, 'ports', 'p8');
+  for (const d of ['game', 'lane']) mkdirSync(path.join(root, d), { recursive: true });
+  writeFileSync(path.join(root, 'port.json'), JSON.stringify({ schema: 'port-any-game/port@1', data: { mode: 'byo' } }));
+  env('HOME', home, () => env('USERPROFILE', home, () => {
+    for (const c of ['git -C ~/ports/p8 add game', 'cd ~/ports/p8 && git add game', 'rm -rf ~/ports/p8/game', 'rm -rf $HOME/ports/p8/game', 'rm -rf %USERPROFILE%/ports/p8/game', 'wrangler deploy ~/ports/p8/build']) {
+      assert.equal(sh(c, base).deny, true, c);
+    }
+    assert.equal(sh('git -C ~/ports/p8 add lane', base).deny, false);
+  }));
+});
+
+test('antigravity and opencode v2 writes are normalised and checked', async () => {
+  const { normalizeEvent } = await import('../skills/port-any-game/scripts/guard.mjs');
+  const root = port('q5');
+  for (const name of ['write_to_file', 'replace_file_content', 'multi_replace_file_content']) {
+    const ev = normalizeEvent({ toolCall: { name, args: { TargetFile: path.join(root, 'game', 'x') } } });
+    assert.equal(ev.tool, 'write', name);
+    assert.equal(checkToolUse(ev).deny, true, name);
+  }
+  const oc = normalizeEvent({ action: 'edit', resources: [path.join(root, 'lane', 'a'), path.join(root, 'game', 'x')] });
+  assert.equal(oc.paths.length, 2);
+  assert.equal(normalizeEvent({ cwd: '/top', tool_name: 'Shell', tool_input: { command: 'ls', working_directory: '/tool' } }).cwd, '/tool');
+});
+
+test('deploy targets are found from args, not just cwd', () => {
+  const root = port('q6');
+  const R = fwd(root);
+  for (const c of [`npx wrangler pages deploy ${R}/build --project-name x`, `netlify deploy --prod --dir=${R}/build`]) assert.equal(sh(c, base).deny, true, c);
+  for (const c of ['npm exec -- wrangler deploy', 'yarn wrangler pages deploy build', 'pnpm wrangler pages deploy build', 'bun x wrangler deploy', 'npm run deploy', 'vercel', 'vercel --prod']) {
+    assert.equal(sh(c, root).deny, true, c);
+  }
+  for (const c of ['vercel dev', 'vercel env pull', 'vercel login', 'npm run build', 'npm test']) assert.equal(sh(c, root).deny, false, c);
+  assert.equal(sh('npm run deploy', base).deny, false);
+});
+
+test('shell writers into game/ and cd-tracked redirects', () => {
+  const root = port('q7');
+  const inRoot = ['Copy-Item work\\a.bin game\\a.bin', 'Copy-Item -Destination game\\a.bin -Path work\\a.bin', 'cpi a game/b', 'cd game && echo x > a.txt',
+    'tar -xf x.tar -C game', 'unzip x.zip -d game', 'Expand-Archive x.zip -DestinationPath game', 'curl -o game/a.bin https://example.com/a', 'wget -O game/a.bin https://example.com/a',
+    'Invoke-WebRequest https://example.com/a -OutFile game/a.bin', 'bash -ec "rm -rf game"', 'powershell -Command "& { Remove-Item game\\a }"'];
+  for (const c of inRoot) assert.equal(sh(c, root).deny, true, c);
+  assert.equal(sh(`cd ${fwd(root)} && echo x > game/a.txt`, base).deny, true);
+  assert.equal(sh('tar -xf game/x.tar -C work', root).deny, false);
+  assert.equal(sh('curl -o work/a.bin https://example.com/a', root).deny, false);
+});
+
+test('git add . is denied when game/ is not ignored, allowed when gitignored', { skip: !hasGit }, () => {
+  const root = port('q8');
+  git(root, 'init', '-q');
+  writeFileSync(path.join(root, 'game', 'd.bin'), 'x');
+  writeFileSync(path.join(root, 'lane', 'a.mjs'), 'x');
+  assert.equal(sh('git add .', root).deny, true, 'game/ not ignored');
+  assert.equal(sh('git add -A', root).deny, true);
+  assert.equal(sh('git add -A lane/', root).deny, false, 'pathspec limits -A');
+  assert.equal(sh('git commit -a -m x', root).deny, false, 'nothing tracked under game/');
+  writeFileSync(path.join(root, '.gitignore'), 'game/\nwork/\nbuild/\n');
+  assert.equal(sh('git add .', root).deny, false, 'game/ is gitignored');
+  assert.equal(sh('git add -A', root).deny, false);
+  assert.equal(sh('git add game/d.bin', root).deny, true, 'explicit path still denied');
+  git(root, 'add', '-f', 'game/d.bin');
+  assert.equal(sh('git commit -m x', root).deny, true, 'staged game file');
 });

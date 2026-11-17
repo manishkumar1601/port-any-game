@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, mkdtempSync, copyFileSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalizeEvent, formatDeny } from '../skills/port-any-game/scripts/guard.mjs';
@@ -82,4 +83,22 @@ test('guard allows benign and session events silently', () => {
   const r = guard('copilot', JSON.stringify(fixture('copilot-sessionstart')));
   assert.equal(r.status, 0);
   assert.equal(r.stdout, '');
+});
+
+test('guard fails open when policy or guard fail to load', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'pag-guard-'));
+  try {
+    const src = path.dirname(PAG);
+    for (const f of ['pag.mjs', 'guard.mjs']) copyFileSync(path.join(src, f), path.join(dir, f));
+    writeFileSync(path.join(dir, 'policy.mjs'), 'export const x = ;');
+    const input = JSON.stringify(fixture('copilot-pretooluse'));
+    const go = () => spawnSync(process.execPath, [path.join(dir, 'pag.mjs'), 'guard', '--host=copilot'], { input, encoding: 'utf8' });
+    let r = go();
+    assert.deepEqual([r.status, r.stdout], [0, '']);
+    assert.match(r.stderr, /allowing/);
+    writeFileSync(path.join(dir, 'guard.mjs'), 'export const run = ;');
+    r = go();
+    assert.deepEqual([r.status, r.stdout], [0, '']);
+    assert.match(r.stderr, /allowing/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
