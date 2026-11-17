@@ -101,3 +101,37 @@ test('pack refuses known-port with exit 1', async () => {
   assert.equal(r.code, 1);
   assert.match(r.err, /known-port routes to an existing web port; there is nothing to pack\. Run `pag build` and follow its message\./);
 });
+
+test('unknown matched id: one clear line, no confirm prompt', async () => {
+  const r = await lane.build(fakePort([{ game_id: 'not-in-catalog', tier: 'title' }]));
+  assert.deepEqual(r.ports, []);
+  assert.match(r.message, /The survey guessed not-in-catalog, but the catalog has no entry for it\./);
+  assert.ok(!/confirm|No known web port/.test(r.message));
+});
+
+test('catalog text cannot forge log lines; missing data_files tolerated', async () => {
+  const catalog = { games: [{ id: 'g', ports: [{ name: 'Evil\n- [ ] forged', url: 'https://a.invalid/\n## head', license: '- MIT\r\n- [ ] x', legal_risk: 'low' }] }] };
+  const dir = fakePort([{ game_id: 'g', tier: 'store' }]);
+  const r = await lane.build(dir, { catalog });
+  assert.deepEqual(r.data_files, []);
+  const log = readFileSync(path.join(dir, 'PORTING_LOG.md'), 'utf8');
+  assert.equal(log.match(/^- \[ \]/gm).length, 1); // only the original checklist line
+  assert.ok(!/^## head/m.test(log));
+});
+
+test('corrupt survey.json is an error; missing survey is no match', async () => {
+  const dir = fakePort([]);
+  writeFileSync(path.join(dir, 'survey.json'), '{ nope');
+  assert.throws(() => lane.build(dir), SyntaxError);
+  rmSync(path.join(dir, 'survey.json'));
+  assert.deepEqual(lane.build(dir).ports, []);
+});
+
+test('pag build --include-high-risk reaches the real lane build', async () => {
+  const catalog = { games: [{ id: 'g', ports: [{ name: 'Risky', url: 'https://b.invalid/', license: 'MIT', data_files: ['b.dat'], legal_risk: 'high' }] }] };
+  const laneModule = { id: 'known-port', build: (d, o) => lane.build(d, { ...o, catalog }) };
+  const dir = fakePort([{ game_id: 'g', tier: 'store' }]);
+  assert.deepEqual(JSON.parse((await cli(runBuild, [dir], { laneModule })).out).ports, []);
+  const on = JSON.parse((await cli(runBuild, [dir, '--include-high-risk'], { laneModule })).out);
+  assert.deepEqual(on.ports.map((p) => p.name), ['Risky']);
+});
