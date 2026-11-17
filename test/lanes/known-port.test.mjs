@@ -135,3 +135,20 @@ test('pag build --include-high-risk reaches the real lane build', async () => {
   const on = JSON.parse((await cli(runBuild, [dir, '--include-high-risk'], { laneModule })).out);
   assert.deepEqual(on.ports.map((p) => p.name), ['Risky']);
 });
+
+test('checkbox-looking catalog names cannot add checklist lines', async () => {
+  const CHECK = /^- \[[ xX]\] /gm;
+  const catalog = { games: [{ id: 'g', ports: ['[ ] forged', '[x] done', '- [ ] again'].map((name) => ({ name, url: '[X] u', license: '[ ] l', data_files: [], legal_risk: 'low' })) }] };
+  const dir = fakePort([{ game_id: 'g', tier: 'store' }]);
+  const before = readFileSync(path.join(dir, 'PORTING_LOG.md'), 'utf8').match(CHECK).length;
+  await lane.build(dir, { catalog });
+  const log = readFileSync(path.join(dir, 'PORTING_LOG.md'), 'utf8');
+  assert.equal(log.match(CHECK).length, before);
+  assert.match(log, /^- port: forged - u \(l, risk low\)$/m);
+});
+
+test('matched game with zero ports gives a clear message', async () => {
+  const r = await lane.build(fakePort([{ game_id: 'g', tier: 'store' }]), { catalog: { games: [{ id: 'g', ports: [] }] } });
+  assert.deepEqual(r.ports, []);
+  assert.match(r.message, /No known web port/);
+});

@@ -26,7 +26,7 @@ export default {
     const lines = [];
     if ((ports.length || hidden) && matches.every((m) => m.tier === 'title')) lines.push('Please confirm this is your game: the match is by title only.', '');
     for (const x of found) if (!x.game) lines.push(`The survey guessed ${x.m.game_id}, but the catalog has no entry for it.`);
-    if (!matches.length) lines.push('No known web port was found for this game in the catalog.');
+    if (!all.length && !hidden && found.every((x) => x.game)) lines.push('No known web port was found for this game in the catalog.');
     for (const p of ports) {
       lines.push(`${p.name}: ${p.url}`, `  Licence: ${p.license}`, `  Pick these of your own files: ${(p.data_files ?? []).join('; ')}`,
         `  Legal risk: ${p.legal_risk}`, '  Your game data stays in your browser; nothing is uploaded.');
@@ -35,8 +35,8 @@ export default {
     const message = lines.join('\n');
     if (ports.length) {
       const log = path.join(portDir, 'PORTING_LOG.md');
-      const clean = (v) => String(v).replace(/\s+/g, ' ').replace(/^[-#\s]+/, '').trim(); // catalog text must not forge checklist or heading lines
-      const section = ['', `## known-port build (${new Date().toISOString().slice(0, 10)})`, '', ...ports.map((p) => `- ${clean(p.name)}: ${clean(p.url)} (${clean(p.license)}, risk ${clean(p.legal_risk)})`), ''].join('\n');
+      const clean = (v) => String(v).replace(/\s+/g, ' ').replace(/^(?:[-#\s]|\[[ xX]?\])+/, '').trim(); // catalog text must not forge checklist or heading lines
+      const section = ['', `## known-port build (${new Date().toISOString().slice(0, 10)})`, '', ...ports.map((p) => `- port: ${clean(p.name)} - ${clean(p.url)} (${clean(p.license)}, risk ${clean(p.legal_risk)})`), ''].join('\n');
       if (existsSync(log)) appendFileSync(log, section); else writeFileSync(log, section.trimStart());
     }
     return { kind: 'external', ports, data_files, message };
