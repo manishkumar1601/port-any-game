@@ -6,7 +6,8 @@ import { nodeWarning } from './doctor.mjs';
 
 const readJson = (f) => JSON.parse(readFileSync(f, 'utf8').replace(/^﻿/, ''));
 
-function findPort(cwd) {
+// Nearest port-any-game port.json at or above cwd: {dir, port} or null. Also used by `pag ack`.
+export function findPort(cwd) {
   for (let dir = path.resolve(cwd); ; dir = path.dirname(dir)) {
     try {
       const p = readJson(path.join(dir, 'port.json'));

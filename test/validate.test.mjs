@@ -72,6 +72,27 @@ test('rejects version drift', () => {
   has(errs, 'version drift');
 });
 
+test('rejects SKILL.md that never mentions an available lane reference', () => {
+  const errs = check(({ edit }) => edit(SKILL, (s) => s.replaceAll('lanes/dos.md', 'lanes/elsewhere.md')));
+  has(errs, 'lane dos-jsdos is available but SKILL.md does not mention references/lanes/dos.md');
+});
+
+test('rejects an available lane whose reference file is missing', () => {
+  const errs = check(({ dir }) => rmSync(path.join(dir, 'skills/port-any-game/references/lanes/runtimes.md')));
+  has(errs, 'lane rt-ruffle needs references/lanes/runtimes.md, which is missing');
+});
+
+test('rejects a pag subcommand used in SKILL.md or references that pag.mjs lacks', () => {
+  const errs = check(({ edit }) => edit('skills/port-any-game/references/verify.md', (s) => `${s}\nnode <skill-dir>/scripts/pag.mjs frobnicate\n`));
+  has(errs, 'references/verify.md: uses `pag frobnicate`, which pag.mjs does not have');
+});
+
+test('rejects a pag command that SKILL.md never mentions', () => {
+  const errs = check(({ edit }) => edit('skills/port-any-game/scripts/pag.mjs',
+    (s) => s.replace('const COMMANDS = {', "const COMMANDS = {\n  zap: () => import('./zap.mjs'),")));
+  has(errs, 'SKILL.md never mentions `pag zap`');
+});
+
 test('rejects broken relative link in references', () => {
   const errs = check(({ dir }) => {
     mkdirSync(path.join(dir, 'skills/port-any-game/references'), { recursive: true });

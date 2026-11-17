@@ -10,6 +10,7 @@ const COMMANDS = {
   verify: () => import('./verify/verify.mjs'),
   doctor: () => import('./doctor.mjs'),
   setup: () => import('./setup.mjs'),
+  ack: () => import('./ack.mjs'),
   // status runs at every session start: a load failure must not break the session either.
   status: () => import('./status.mjs').catch((e) => ({ run: async () => (process.stderr.write(`pag status: load error, skipping: ${e?.message}
 `), 0) })),

@@ -1,7 +1,11 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { LANES } from '../skills/port-any-game/scripts/lanes/index.mjs';
 
+// Lane id -> its family reference, references/lanes/<family>.md (spec §13). Unlisted ids use their own name.
+const FAMILY = { 'known-port': 'known-ports', 'dos-jsdos': 'dos' };
+const family = (id) => FAMILY[id] ?? (id.startsWith('rt-') ? 'runtimes' : id);
 const ALLOWED_KEYS = new Set(['name', 'description', 'license', 'compatibility', 'metadata', 'allowed-tools']);
 const readJson = (f) => JSON.parse(readFileSync(f, 'utf8'));
 
@@ -80,6 +84,24 @@ export function validateRepo(rootDir) {
         const target = m[1].split('#')[0];
         if (!target || /^([a-z][a-z0-9+.-]*:|\/)/i.test(target)) continue;
         if (!existsSync(path.resolve(path.dirname(f), target))) errors.push(`${rel(f)}: broken link ${m[1]}`);
+      }
+    }
+
+    // pag skills: the workflow must teach every lane that can run and every command that exists, and use no other.
+    const pagFile = path.join(dir, 'scripts', 'pag.mjs');
+    if (!existsSync(pagFile)) continue;
+    for (const lane of Object.values(LANES).filter((l) => l.available)) {
+      const ref = `references/lanes/${family(lane.id)}.md`;
+      if (!existsSync(path.join(dir, ...ref.split('/')))) errors.push(`${rel(skillFile)}: lane ${lane.id} needs ${ref}, which is missing`);
+      if (!text.includes(ref)) errors.push(`${rel(skillFile)}: lane ${lane.id} is available but SKILL.md does not mention ${ref}`);
+    }
+    const commands = [...readFileSync(pagFile, 'utf8').matchAll(/^\s+([\w-]+): \(\) => import\(/gm)].map((m) => m[1]);
+    for (const c of commands) {
+      if (!new RegExp(`\\bpag(\\.mjs)? ${c}\\b`).test(text)) errors.push(`${rel(skillFile)}: SKILL.md never mentions \`pag ${c}\``);
+    }
+    for (const f of mdFiles) {
+      for (const m of readFileSync(f, 'utf8').matchAll(/\bpag\.mjs\s+([a-z][\w-]*)/g)) {
+        if (!commands.includes(m[1])) errors.push(`${rel(f)}: uses \`pag ${m[1]}\`, which pag.mjs does not have`);
       }
     }
   }
