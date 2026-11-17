@@ -23,8 +23,10 @@ export class Cdp {
         else p?.resolve(m.result);
         return;
       }
+      // A failing listener must not break the client, but it must not vanish either.
+      const report = (e) => process.stderr.write(`pag verify: CDP ${m.method} listener failed: ${e?.stack ?? e}\n`);
       for (const cb of this.#handlers.get(m.method) ?? []) {
-        try { Promise.resolve(cb(m.params, m.sessionId)).catch(() => {}); } catch { /* a listener must not break the client */ }
+        try { Promise.resolve(cb(m.params, m.sessionId)).catch(report); } catch (e) { report(e); }
       }
     });
     ws.addEventListener('close', () => {
@@ -33,13 +35,15 @@ export class Cdp {
     });
   }
 
-  static connect(wsUrl) {
+  static connect(wsUrl, timeoutMs = 10000) {
     if (typeof WebSocket !== 'function') return Promise.reject(new Error('the CDP runner needs Node 22+ (global WebSocket)'));
-    return new Promise((resolve, reject) => {
-      const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(wsUrl);
+    const opened = new Promise((resolve, reject) => {
       ws.addEventListener('open', () => resolve(new Cdp(ws)), { once: true });
       ws.addEventListener('error', () => reject(new Error(`cannot connect to ${wsUrl}`)), { once: true });
     });
+    return withTimeout(opened, timeoutMs, `no DevTools connection to ${wsUrl} within ${timeoutMs / 1000} s`)
+      .catch((e) => { ws.close(); throw e; });
   }
 
   // A browser that hangs (or a page stuck in a loop) must not hang verify: every command times out.

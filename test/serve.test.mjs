@@ -139,18 +139,22 @@ test('fixture mount', async () => serving({ fixtureDir: fix }, async (url) => {
   assert.equal((await fetch(url + '/f.txt')).status, 404);
 }));
 
-test('fixtureIndex is served at /__fixture/index.json with the same headers (R31)', async () => {
-  const index = [{ path: 'f.txt', size: 7 }];
-  await serving({ fixtureDir: fix, fixtureIndex: index }, async (url) => {
-    const r = await fetch(url + '/__fixture/index.json');
-    assert.equal(r.status, 200);
-    assert.match(r.headers.get('content-type'), /^application\/json/);
-    assert.equal(r.headers.get('x-robots-tag'), 'noindex, nofollow');
-    assert.equal(r.headers.get('cross-origin-opener-policy'), 'same-origin');
-    assert.deepEqual(await r.json(), index);
-    assert.equal((await fetch(url + '/__fixture/f.txt')).status, 200, 'fixture files still served');
-  });
-  await serving({ fixtureDir: fix }, async (url) => assert.equal((await fetch(url + '/__fixture/index.json')).status, 404));
+test('fixtureIndex is served beside the mount at /__fixture.index.json, never shadowing a game file (R34)', async () => {
+  const index = [{ path: 'f.txt', size: 7 }, { path: 'index.json', size: 14 }];
+  writeFileSync(path.join(fix, 'index.json'), '{"game":true}\n'); // a game's own top-level index.json
+  try {
+    await serving({ fixtureDir: fix, fixtureIndex: index }, async (url) => {
+      const r = await fetch(url + '/__fixture.index.json');
+      assert.equal(r.status, 200);
+      assert.match(r.headers.get('content-type'), /^application\/json/);
+      assert.equal(r.headers.get('x-robots-tag'), 'noindex, nofollow');
+      assert.equal(r.headers.get('cross-origin-opener-policy'), 'same-origin');
+      assert.deepEqual(await r.json(), index);
+      assert.equal(await (await fetch(url + '/__fixture/index.json')).text(), '{"game":true}\n', 'the game file is not shadowed');
+      assert.equal((await fetch(url + '/__fixture/f.txt')).status, 200);
+    });
+    await serving({ fixtureDir: fix }, async (url) => assert.equal((await fetch(url + '/__fixture.index.json')).status, 404));
+  } finally { rmSync(path.join(fix, 'index.json')); }
 });
 
 test('cli: usage and policy refusals', async () => {

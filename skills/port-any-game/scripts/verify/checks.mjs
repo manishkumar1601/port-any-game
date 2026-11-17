@@ -3,13 +3,16 @@ export const THRESHOLDS = {
   nearBlackLuma: 8, // luma < 8/255 is near-black
   blankRatio: 0.98, // a frame is blank when >= 98% of it is near-black...
   blankStd: 2, // ...or its luma standard deviation is < 2
+  blankWarnShare: 0.3, // up to 3 of 10 blank samples (a fade, a loading screen) warn; more fail
   frozenDiff: 0.5, // mean abs difference (0-255 scale) below this = no change
+  stallS: 2, // gameFrames may stop increasing for at most 2 s
   inputWindowS: 3, // the picture must change within 3 s after input
   fpsPass: 0.9, // game fps >= 0.9 x target passes...
   fpsWarn: 0.5, // ...>= 0.5 x target warns, below fails
   audioRms: 0.001, // -60 dBFS
   memWarn: 5, // soak growth %/min: < 5 pass, 5-10 warn...
   memFail: 10, // ...> 10 fail
+  heapNoiseBytes: 1024 * 1024, // heap growth under 1 MiB over the soak is noise
   readyFirstS: 120, // first load (BYO import or download) times out after this
   readyCachedS: 30, // a reload (files cached) times out after this
 };
@@ -48,6 +51,29 @@ export function isCrossOrigin(url, origin) {
   } catch { return false; }
 }
 
+// Longest time (s) gameFrames did not increase. series: [{t: seconds, frames}] in time order; a stall still running
+// at the last sample counts.
+export function longestStall(series) {
+  let worst = 0;
+  let last = series[0];
+  for (const s of series) {
+    if (s.frames > last.frames) last = s;
+    else worst = Math.max(worst, s.t - last.t);
+  }
+  return worst;
+}
+
+// Soak heap growth in %/min. Post-GC heap is the floor of the saw-tooth, so this compares the minimum of the first and
+// last thirds of the samples. null when the browser gives no heap numbers.
+// ponytail: endpoint floors; a regression slope over 10 s samples if soaks need finer judging.
+export function heapGrowth(heap, secs, noise = THRESHOLDS.heapNoiseBytes) {
+  if (heap.length < 2 || heap.some((h) => h == null) || secs <= 0) return null;
+  const k = Math.max(1, Math.floor(heap.length / 3));
+  const lo = Math.min(...heap.slice(0, k));
+  const hi = Math.min(...heap.slice(-k));
+  return hi - lo < noise ? 0 : ((hi - lo) / lo) * 100 / (secs / 60);
+}
+
 const f2 = (x) => (x ?? 0).toFixed(2);
 const list = (a) => `${a.slice(0, 3).join('; ')}${a.length > 3 ? ` (+${a.length - 3} more)` : ''}`;
 
@@ -73,7 +99,7 @@ export function judge(m, t = THRESHOLDS) {
     const blank = got.filter((f) => f.nearBlackRatio >= t.blankRatio || f.stdLuma < t.blankStd).length;
     const mean = got.reduce((s, f) => s + f.meanLuma, 0) / (got.length || 1);
     if (!got.length) add('blank', 'warn', 'no visible canvas to sample; check the screenshots');
-    else if (blank === got.length) add('blank', 'fail', `all ${blank} samples are blank (near-black or flat)`);
+    else if (blank / got.length > t.blankWarnShare) add('blank', 'fail', `${blank} of ${got.length} samples are blank (near-black or flat)`);
     else if (blank) add('blank', 'warn', `${blank} of ${got.length} samples blank (a fade or loading screen?)`);
     else add('blank', 'pass', `${got.length} samples, mean luma ${mean.toFixed(1)}`);
   }
@@ -112,11 +138,16 @@ export function judge(m, t = THRESHOLDS) {
       ? over.map((v) => `${v.name} ${v.w}x${v.h}: page is ${v.scrollWidth}px wide, viewport ${v.innerWidth}px`).join('; ')
       : m.viewports.map((v) => `${v.name} ${v.w}x${v.h} ok`).join(', '));
   }
-  if (m.soak) {
-    const { seconds, framesDelta, growthPctPerMin: g } = m.soak;
-    const d = `${seconds.toFixed(0)} s, ${g == null ? 'heap not measurable in this browser' : `heap growth ${g.toFixed(1)}%/min`}`;
-    if (framesDelta <= 0) add('soak', 'fail', `the main loop stopped during the soak (${d})`);
-    else add('soak', g > t.memFail ? 'fail' : g >= t.memWarn ? 'warn' : 'pass', d);
+  if (m.loop) {
+    const windows = Object.entries(m.loop).filter(([, s]) => s?.length).map(([name, s]) => ({ name, stall: longestStall(s), secs: s.at(-1).t - s[0].t }));
+    const bad = windows.filter((w) => w.stall > t.stallS);
+    const d = windows.map((w) => `${w.name}: longest stall ${w.stall.toFixed(1)} s in ${w.secs.toFixed(0)} s`).join('; ');
+    if (windows.length) add('loop', bad.length ? 'fail' : 'pass', bad.length ? `gameFrames stopped for more than ${t.stallS} s (${d})` : d);
+  }
+  if (m.memory) {
+    const { seconds, growthPctPerMin: g } = m.memory;
+    if (g == null) add('memory', 'skip', `heap not measurable in this browser (${seconds.toFixed(0)} s soak)`);
+    else add('memory', g > t.memFail ? 'fail' : g >= t.memWarn ? 'warn' : 'pass', `heap growth ${g.toFixed(1)}%/min over a ${seconds.toFixed(0)} s soak`);
   }
   if (m.stages) {
     const bad = m.stages.filter((s) => s.state !== 'running' || !s.frame || s.frame.nearBlackRatio >= t.blankRatio || s.frame.stdLuma < t.blankStd);
@@ -134,9 +165,10 @@ export function judge(m, t = THRESHOLDS) {
     add('requests', bad.length ? 'fail' : 'pass', bad.length ? list(bad.map((r) => `${r.status || r.error || 'failed'} ${r.url}`)) : `${m.requests.length} own-origin requests ok`);
   }
   if (m.privacy) {
-    const { withBody, crossOrigin } = m.privacy;
-    const bad = [...withBody.map((r) => `request with a body: ${r}`), ...crossOrigin.map((u) => `cross-origin: ${u}`)];
-    add('privacy', bad.length ? 'fail' : 'pass', bad.length ? list(bad) : 'no request bodies, no cross-origin requests');
+    const { withBody, crossOrigin, popups = [] } = m.privacy;
+    const bad = [...withBody.map((r) => `request with a body: ${r}`), ...crossOrigin.map((u) => `cross-origin: ${u}`),
+      ...popups.map((u) => `popup window opened (${u || 'about:blank'}); its requests are not checked`)];
+    add('privacy', bad.length ? 'fail' : 'pass', bad.length ? list(bad) : 'no request bodies, no cross-origin requests, no popups');
   }
   const status = checks.some((c) => c.status === 'fail') ? 'fail' : checks.some((c) => c.status === 'warn') ? 'warn' : 'pass';
   return { status, checks };

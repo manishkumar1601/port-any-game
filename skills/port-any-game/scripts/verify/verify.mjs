@@ -3,22 +3,22 @@
 // and network, and writes <port>/verify/{report.json, step-*.png, console.log}.
 // Exit 0 pass, 1 fail (also: not a packed build, bad arguments), 2 warn only, 3 unsupported environment.
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { sha256File, walk } from '../lib/fsx.mjs';
 import { readPort } from '../pack.mjs';
 import { startServer } from '../serve.mjs';
 import { findBrowser, playwrightEntry } from './browser.mjs';
-import { frameStats, isCrossOrigin, judge, meanAbsDiff, THRESHOLDS as T } from './checks.mjs';
+import { frameStats, heapGrowth, isCrossOrigin, judge, meanAbsDiff, THRESHOLDS as T } from './checks.mjs';
+import { probe, staticChecks } from './static.mjs';
 
 const INSTRUMENT = fileURLToPath(new URL('./instrument.js', import.meta.url));
 const BROWSERS = ['chromium', 'firefox', 'webkit'];
 const EXIT = { pass: 0, fail: 1, warn: 2, unsupported: 3 };
-const MiB = 1024 * 1024;
-const SAMPLES = 10; // frame samples 0.5 s apart while running (note 05 §7b)
+const SAMPLES = 21; // frame samples 0.5 s apart: 10 s while running (spec §9 step 7)
+const MAX_SOAK_S = 3600;
 const SOFTWARE = /swiftshader|llvmpipe|softpipe|software|basic render/i;
 const readJson = (f) => JSON.parse(readFileSync(f, 'utf8').replace(/^﻿/, ''));
 const isDir = (p) => statSync(p, { throwIfNoEntry: false })?.isDirectory() === true;
@@ -75,71 +75,6 @@ async function waitState(d, want, timeoutS) {
   }
 }
 
-// Post-GC heap is the floor of the saw-tooth, so compare the minimum of the first and last thirds of the samples.
-// ponytail: growth under 1 MiB is treated as noise; a regression slope over 10 s samples if soaks need finer judging.
-function heapGrowth(heap, secs) {
-  if (heap.length < 2 || heap.some((h) => h == null) || secs <= 0) return null;
-  const k = Math.max(1, Math.floor(heap.length / 3));
-  const lo = Math.min(...heap.slice(0, k));
-  const hi = Math.min(...heap.slice(-k));
-  return hi - lo < MiB ? 0 : ((hi - lo) / lo) * 100 / (secs / 60);
-}
-
-// Step 1: static checks on dist/ (no browser).
-async function staticChecks(dist, shell, manifest) {
-  const out = [];
-  const add = (name, status, detail) => out.push({ name, status, detail });
-  const missing = ['game_id', 'lane', 'entry.adapter', 'data.mode', 'data.manifest', 'verify.target_fps']
-    .filter((k) => k.split('.').reduce((o, p) => o?.[p], shell) == null);
-  if (shell.schema !== 1) missing.unshift('schema: 1');
-  if (shell.entry?.adapter && !statSync(path.join(dist, ...shell.entry.adapter.split('/')), { throwIfNoEntry: false })?.isFile()) missing.push(`${shell.entry.adapter} (no such file)`);
-  add('schema', missing.length ? 'fail' : 'pass', missing.length ? `shell.json: missing ${missing.join(', ')}` : 'shell.json ok');
-
-  const files = [];
-  for await (const e of walk(dist)) if (!e.truncated && !e.error) files.push(e);
-  const problems = [];
-  if (shell.data?.mode === 'byo') {
-    const carried = files.filter((e) => e.rel.startsWith('game/') && e.rel !== 'game/manifest.json');
-    if (carried.length) problems.push(`a byo build must not carry game files, found ${carried.length} (${carried[0].rel})`);
-  } else {
-    for (const f of manifest.files ?? []) {
-      const abs = path.join(dist, 'game', ...f.path.split('/'));
-      const st = statSync(abs, { throwIfNoEntry: false });
-      if (!st?.isFile()) problems.push(`${f.path}: missing`);
-      else if (st.size !== f.size) problems.push(`${f.path}: ${st.size} bytes, manifest says ${f.size}`);
-      else if ((await sha256File(abs, st.size)).sha256 !== f.sha256) problems.push(`${f.path}: SHA-256 differs from the manifest`);
-    }
-  }
-  add('manifest', problems.length ? 'fail' : 'pass', problems.length ? problems.slice(0, 5).join('; ')
-    : `${manifest.files?.length ?? 0} game files, ${((manifest.total_bytes ?? 0) / MiB).toFixed(1)} MiB, ${shell.data?.mode}`);
-  const big = files.filter((e) => e.size > 25 * MiB);
-  add('host limits', big.length ? 'warn' : 'pass', big.length ? `${big.length} files over 25 MiB, which some static hosts refuse (${big[0].rel})` : `${files.length} files, none over 25 MiB`);
-
-  let headers = null;
-  try { headers = readFileSync(path.join(dist, '_headers'), 'utf8'); } catch { /* checked below */ }
-  const coi = /Cross-Origin-Opener-Policy:\s*same-origin/i.test(headers) && /Cross-Origin-Embedder-Policy:\s*require-corp/i.test(headers);
-  const hp = !headers ? 'no _headers file' : /credentialless/i.test(headers) ? '_headers uses credentialless (Safari lacks it)'
-    : shell.needs_coi && !coi ? 'needs_coi is true but _headers lacks COOP same-origin + COEP require-corp' : null;
-  add('headers', hp ? 'fail' : 'pass', hp ?? '_headers present');
-  const lic = files.filter((e) => e.rel.startsWith('LICENSES/'));
-  add('licenses', lic.length ? 'pass' : 'fail', lic.length ? lic.map((e) => e.rel.slice(9)).join(', ') : 'no notices in LICENSES/');
-  return out;
-}
-
-// Step 2: what the server really sends.
-async function probe(url, shell) {
-  const issues = [];
-  const head = await fetch(`${url}/`, { method: 'HEAD' });
-  const h = (k) => head.headers.get(k);
-  if (shell.needs_coi && (h('cross-origin-opener-policy') !== 'same-origin' || h('cross-origin-embedder-policy') !== 'require-corp')) issues.push('COOP/COEP not served');
-  if (/credentialless/i.test(h('cross-origin-embedder-policy') ?? '')) issues.push('COEP credentialless served');
-  if (!h('x-robots-tag')) issues.push('no X-Robots-Tag');
-  const r = await fetch(`${url}/shell/shell.js`, { headers: { Range: 'bytes=0-15' } });
-  const body = await r.arrayBuffer();
-  if (r.status !== 206 || body.byteLength !== 16) issues.push(`Range bytes=0-15 gave HTTP ${r.status} with ${body.byteLength} bytes`);
-  return { name: 'serve', status: issues.length ? 'fail' : 'pass', detail: issues.join('; ') || 'headers ok, Range 206' };
-}
-
 // auto: the user's Chrome/Edge over CDP, else Playwright from the tool cache, else unsupported (exit 3).
 function pickRunner(runner, browser) {
   const exe = browser === 'chromium' && typeof WebSocket === 'function' ? findBrowser() : null;
@@ -181,6 +116,8 @@ async function runBrowser(browser, o) {
   });
   d.onRequest((q) => requests.push(q));
   d.onResponse((r) => responses.push(r));
+  const popups = [];
+  d.onPopup(({ url }) => popups.push(url));
   let n = 0;
   const shot = (name) => d.screenshot(path.join(o.out, `step-${o.prefix}${++n}-${name}.png`)).catch(() => {});
   const play = async () => {
@@ -205,12 +142,13 @@ async function runBrowser(browser, o) {
     m.env = await call(d, PAGE.env);
     if (o.shell.needs_coi && !m.env.coi) m.checks.push({ name: 'isolation', status: 'fail', detail: 'needs_coi, but the page is not cross-origin isolated' });
 
-    // 6-7, 9: Play, then samples (frames, game frame rate, audio).
+    // 6-7, 9: Play, then 10 s of samples (frames, game frame rate and stalls, audio).
     m.shell = await play();
     if (m.shell.state !== 'running') return;
     await shot('play');
     m.frames = [];
     m.diffs = [];
+    m.loop = { window: [] };
     let firstTick, last, prev, t0, t1;
     let rms = 0;
     for (let i = 0; i < SAMPLES; i++) {
@@ -219,6 +157,7 @@ async function runBrowser(browser, o) {
       t1 = Date.now();
       firstTick ??= last;
       t0 ??= t1;
+      m.loop.window.push({ t: (t1 - t0) / 1000, frames: last.gameFrames });
       const px = pixels(last.frame);
       m.frames.push(px && frameStats(px, last.frame.w, last.frame.h));
       if (px && prev) m.diffs.push(meanAbsDiff(prev, px));
@@ -275,23 +214,22 @@ async function runBrowser(browser, o) {
     m.shell = again;
     if (again.state !== 'ready') return;
 
-    // 12: soak: the loop keeps running and the JS heap does not grow.
+    // 12: soak: the loop keeps running (no gameFrames stall over 2 s) and the JS heap does not grow.
     if (o.soakSec > 0) {
       m.shell = await play();
       if (m.shell.state !== 'running') return;
       const heap = [];
       const ts = Date.now();
-      let a;
-      let z;
+      m.loop.soak = [];
       for (;;) {
-        z = await call(d, PAGE.soak);
-        a ??= z;
+        const z = await call(d, PAGE.soak);
+        m.loop.soak.push({ t: (Date.now() - ts) / 1000, frames: z.gameFrames });
         heap.push(z.heap);
         if (Date.now() - ts >= o.soakSec * 1000) break;
         await sleep(Math.min(1000, o.soakSec * 1000));
       }
       const secs = (Date.now() - ts) / 1000;
-      m.soak = { seconds: secs, framesDelta: z.gameFrames - a.gameFrames, growthPctPerMin: heapGrowth(heap, secs) };
+      m.memory = { seconds: secs, growthPctPerMin: heapGrowth(heap, secs) };
       await shot('soak');
       m.shell = await call(d, PAGE.state);
     }
@@ -315,21 +253,24 @@ async function runBrowser(browser, o) {
 
   try { await steps(); } catch (e) { m.checks.push({ name: 'run', status: 'fail', detail: e.message }); } finally { await d.close(); }
 
-  // 13: requests. Own-origin ones must succeed; BYO sends no bodies and nothing cross-origin.
+  // 13: requests. Own-origin ones must succeed; BYO sends no bodies, nothing cross-origin and opens no popups
+  // (a popup's own requests are not recorded).
   m.requests = responses.filter((r) => /^https?:/.test(r.url) && !isCrossOrigin(r.url, origin)).map((r) => ({ ...r, url: rel(r.url) }));
-  if (o.byo) m.privacy = { withBody: requests.filter((q) => q.hasBody).map((q) => `${q.method} ${rel(q.url)}`), crossOrigin: requests.filter((q) => q.crossOrigin).map((q) => q.url) };
+  if (o.byo) m.privacy = { withBody: requests.filter((q) => q.hasBody).map((q) => `${q.method} ${rel(q.url)}`), crossOrigin: requests.filter((q) => q.crossOrigin).map((q) => q.url), popups };
   const extra = {
-    browserPath: pick.exe?.path ?? null, measures: m, console: lines,
+    browserPath: pick.exe?.path ?? null, measures: m, console: lines, popups,
     requests: requests.filter((q) => /^https?:/.test(q.url)).map((q) => ({ method: q.method, url: rel(q.url), ...(q.hasBody ? { hasBody: true } : {}), ...(q.crossOrigin ? { crossOrigin: true } : {}) })),
   };
   if (unsupported) return env(unsupported, extra);
   return { runner: pick.kind, ...extra, checks: judge(m).checks };
 }
 
+// Nearest port.json at or above dist. The first one found decides: an unreadable one is an error (readPort throws),
+// never a reason to report into some other port further up.
 function portOf(dist) {
   for (let d = dist; ; d = path.dirname(d)) {
-    try { readPort(d); return d; } catch { /* keep looking */ }
-    if (path.dirname(d) === d) return null;
+    if (existsSync(path.join(d, 'port.json'))) return { dir: d, port: readPort(d) };
+    if (path.dirname(d) === d) return { dir: null, port: null };
   }
 }
 
@@ -341,15 +282,15 @@ export async function verify(distDir, { runner = 'auto', soakSec = 60, headed = 
     shell = readJson(path.join(dist, 'shell.json'));
     manifest = readJson(path.join(dist, 'game', 'manifest.json'));
   } catch (e) { throw new Error(`${dist} is not a packed build (${e.code === 'ENOENT' ? 'no shell.json or game/manifest.json' : e.message}); run pag pack first`); }
-  const port = portOf(dist);
+  const { dir: port, port: portJson } = portOf(dist);
   const out = path.join(port ?? path.dirname(dist), 'verify');
   mkdirSync(out, { recursive: true });
   // Only our own files: without a port.json, out is <dist>/../verify, which could be a folder of the user's.
   for (const f of readdirSync(out)) if (/^(report\.json|console\.log|step-.*\.png)$/.test(f)) rmSync(path.join(out, f), { force: true });
 
-  const checks = await staticChecks(dist, shell, manifest);
+  const checks = await staticChecks(dist, shell, manifest, portJson);
   const byo = shell.data?.mode === 'byo';
-  // R31: BYO imports straight from the port's game files; nothing is written into that folder.
+  // R31/R34: BYO imports straight from the port's game files; nothing is written into that folder.
   const fixture = !byo ? null : fixtureDir ? path.resolve(fixtureDir) : port && path.join(port, ...String(manifest.source ?? 'game').split('/'));
   if (byo) checks.push(fixture && isDir(fixture) ? { name: 'fixture', status: 'pass', detail: fixture }
     : { name: 'fixture', status: 'fail', detail: `BYO verify imports the game files from ${fixture ?? '<port>/game (no port.json found)'}, which is not a folder; pass --fixture <game folder>` });
@@ -361,7 +302,7 @@ export async function verify(distDir, { runner = 'auto', soakSec = 60, headed = 
   });
   const runs = [];
   try {
-    checks.push(await probe(srv.url, shell));
+    checks.push(await probe(srv.url, shell, dist));
     const url = `${srv.url}/?verify=1${byo ? '&verify_import=/__fixture/' : ''}${query ? `&${query.replace(/^[?&]+/, '')}` : ''}`;
     for (const browser of browsers) {
       const prefix = browsers.length > 1 ? `${browser}-` : '';
@@ -398,7 +339,8 @@ export async function run(argv, io = { out: (t) => process.stdout.write(t), err:
     const v = args.values;
     if (args.positionals.length > 1) throw new Error('too many arguments');
     if (!['auto', 'cdp', 'playwright'].includes(v.runner)) throw new Error(`unknown runner '${v.runner}'`);
-    if (!(Number(v.soak) >= 0)) throw new Error('--soak takes a number of seconds');
+    const soak = Number(v.soak);
+    if (!Number.isFinite(soak) || soak < 0 || soak > MAX_SOAK_S) throw new Error(`--soak takes 0 to ${MAX_SOAK_S} seconds, not '${v.soak}'`);
     if (![...BROWSERS, 'all'].includes(v.browser)) throw new Error(`unknown browser '${v.browser}'`);
   } catch (e) { io.err(`pag verify: ${e.message}\n${USAGE}`); return 1; }
   const v = args.values;

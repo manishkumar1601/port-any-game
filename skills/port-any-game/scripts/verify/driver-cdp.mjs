@@ -1,11 +1,12 @@
 // Driver over the user's Chrome/Edge: one browser-level CDP connection, Target.createTarget + attachToTarget
 // {flatten: true}. Trusted input (Input.dispatch*), console + exceptions + Log entries, network from the page and
-// from its workers (auto-attached: the BYO import Worker's fixture fetches are only visible that way).
+// from its workers, nested ones included (auto-attached: the BYO import Worker's fixture fetches are only visible that
+// way). Popups (window.open) are reported, not followed: their requests are not recorded.
 //
 // Driver interface (also implemented by driver-playwright.mjs):
 //   {open(url), evaluate(fnSource, arg?), screenshot(file), click(x, y), key(code), setViewport(w, h), reload(),
 //    onConsole(cb({level, text})), onRequest(cb({url, method, hasBody, crossOrigin})), onResponse(cb({url, status, error?})),
-//    close()}
+//    onPopup(cb({url})), close()}
 // level 'pageerror' = an uncaught exception; status 0 = the request failed without a response.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -30,6 +31,8 @@ export function keyInfo(code) {
   return { key, keyCode, text };
 }
 
+const AUTO_ATTACH = { autoAttach: true, waitForDebuggerOnStart: true, flatten: true };
+
 export async function openCdp({ path: exe, headless = true, initScript = '' }) {
   const browser = await launchBrowser({ path: exe, headless });
   let cdp;
@@ -39,7 +42,7 @@ export async function openCdp({ path: exe, headless = true, initScript = '' }) {
     const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
     const S = (method, params) => cdp.send(method, params, sessionId);
     const sessions = new Set([sessionId]);
-    const cbs = { console: [], request: [], response: [] };
+    const cbs = { console: [], request: [], response: [], popup: [] };
     const emit = (kind, v) => { for (const cb of cbs[kind]) cb(v); };
     const ours = (fn) => (p, sid) => { if (sessions.has(sid)) fn(p, sid); };
     const urls = new Map(); // requestId -> url, for loadingFailed
@@ -54,20 +57,23 @@ export async function openCdp({ path: exe, headless = true, initScript = '' }) {
     }));
     cdp.on('Network.responseReceived', ours((p) => emit('response', { url: p.response.url, status: p.response.status })));
     cdp.on('Network.loadingFailed', ours((p) => { if (!p.canceled) emit('response', { url: urls.get(p.requestId) ?? '', status: 0, error: p.blockedReason ?? p.errorText }); }));
-    // Workers start paused until we listen to them. ponytail: out-of-process (cross-origin) iframes would attach here
-    // too and get no instrument; the shell's CSP (default-src 'self') blocks them, so they are not handled.
+    // Workers start paused until we listen to them, and auto-attach their own workers the same way. ponytail:
+    // out-of-process (cross-origin) iframes would attach here too and get no instrument; the shell's CSP
+    // (default-src 'self') blocks them, so they are not handled.
     cdp.on('Target.attachedToTarget', ours(async (p) => {
       const child = p.sessionId;
       sessions.add(child);
       const C = (method, params) => cdp.send(method, params, child);
-      try { await Promise.all([C('Network.enable'), C('Runtime.enable')]); } catch { /* the target went away */ }
-      finally { C('Runtime.runIfWaitingForDebugger').catch(() => {}); }
+      await Promise.allSettled([C('Network.enable'), C('Runtime.enable'), C('Target.setAutoAttach', AUTO_ATTACH)]);
+      C('Runtime.runIfWaitingForDebugger').catch(() => {});
     }));
+    // window.open(), target=_blank links and forms open a window: reported, its own requests are not recorded.
+    cdp.on('Page.windowOpen', ours((p) => emit('popup', { url: p.url })));
     cdp.on('Target.detachedFromTarget', (p) => { if (p.sessionId !== sessionId) sessions.delete(p.sessionId); });
 
     await Promise.all([S('Page.enable'), S('Runtime.enable'), S('Log.enable'), S('Network.enable'), S('Emulation.setFocusEmulationEnabled', { enabled: true })]);
     await S('Page.addScriptToEvaluateOnNewDocument', { source: initScript });
-    await S('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true });
+    await S('Target.setAutoAttach', AUTO_ATTACH);
 
     const navigate = async (go) => {
       let off;
@@ -88,7 +94,10 @@ export async function openCdp({ path: exe, headless = true, initScript = '' }) {
         return r.result.value;
       },
       async screenshot(file) {
-        const { data } = await S('Page.captureScreenshot', { format: 'png' });
+        // A page that has not painted for ~15 s (a frozen game) made captureScreenshot hang until timeout in headless
+        // Edge 157, unless the tab is brought to the front first (activating once at start was not enough).
+        await S('Page.bringToFront');
+        const { data } = await cdp.send('Page.captureScreenshot', { format: 'png' }, sessionId, 10000);
         mkdirSync(path.dirname(file), { recursive: true });
         writeFileSync(file, Buffer.from(data, 'base64'));
       },
@@ -108,6 +117,7 @@ export async function openCdp({ path: exe, headless = true, initScript = '' }) {
       onConsole: (cb) => cbs.console.push(cb),
       onRequest: (cb) => cbs.request.push(cb),
       onResponse: (cb) => cbs.response.push(cb),
+      onPopup: (cb) => cbs.popup.push(cb),
       async close() { cdp.close(); await browser.close(); },
     };
   } catch (e) {

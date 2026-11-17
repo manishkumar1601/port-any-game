@@ -3,7 +3,7 @@
 // move into /game/, then a .done marker holding the sha256, so an interrupted import resumes per file. The .part
 // and .done files live in their own OPFS tree (importLayout), never beside game files.
 // This module is also that Worker (it detects WorkerGlobalScope). No DOM at module top level.
-import { fileHasher, importLayout, matchManifest, normalizePath } from './pure.js';
+import { fileHasher, fixtureIndexUrl, importLayout, matchManifest, normalizePath } from './pure.js';
 import { dirAt } from './storage.js';
 
 const PROGRESS_STEP = 8 * 1024 * 1024;
@@ -65,10 +65,12 @@ export async function fromDataTransfer(dt) {
   return out;
 }
 
-// Test hook ?verify_import=/__fixture/: <url>index.json lists paths (strings or {path, size}); the Worker fetches them.
+// Test hook ?verify_import=/__fixture/: /__fixture.index.json lists paths (strings or {path, size}) under that url;
+// the Worker fetches them.
 export async function fromFixture(url) {
-  const res = await fetch(`${url}index.json`);
-  if (!res.ok) throw new Error(`verify_import: ${url}index.json: HTTP ${res.status}`);
+  const index = fixtureIndexUrl(url);
+  const res = await fetch(index);
+  if (!res.ok) throw new Error(`verify_import: ${index}: HTTP ${res.status}`);
   const out = [];
   for (const item of await res.json()) {
     const rel = normalizePath(typeof item === 'string' ? item : item?.path ?? '');

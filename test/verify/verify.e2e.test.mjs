@@ -15,7 +15,7 @@ process.env.PAG_HOME = path.join(base, 'home');
 after(() => rmSync(base, { recursive: true, force: true, maxRetries: 5 }));
 
 const { pack } = await import('../../skills/port-any-game/scripts/pack.mjs');
-const { verify } = await import('../../skills/port-any-game/scripts/verify/verify.mjs');
+const { verify, run } = await import('../../skills/port-any-game/scripts/verify/verify.mjs');
 const { findBrowser } = await import('../../skills/port-any-game/scripts/verify/browser.mjs');
 
 const ADAPTER = fileURLToPath(new URL('../fixtures/lane-test/adapter.js', import.meta.url));
@@ -31,6 +31,7 @@ async function packed(verifyExtra = {}) {
   mkdirSync(path.join(dir, 'game', 'data'), { recursive: true });
   writeFileSync(path.join(dir, 'game', 'GAME.EXE'), randomBytes(4096));
   writeFileSync(path.join(dir, 'game', 'data', 'level1.dat'), randomBytes(3000));
+  writeFileSync(path.join(dir, 'game', 'index.json'), '{"a game file":true}\n'); // R34: must not be shadowed by the fixture index
   writeFileSync(path.join(dir, 'port.json'), JSON.stringify({ schema: 'port-any-game/port@1', id: `verify-test-${n}`, name: 'Verify Test', lane: 'lane-test', data: { mode: 'byo' }, tools: {}, acks: [] }));
   const { distDir } = await pack(dir, { laneModule: laneModule(verifyExtra) });
   return { dir, distDir };
@@ -58,19 +59,21 @@ async function verifyMode(query, { soakSec = 0, stages } = {}) {
 test('lane-test ok passes', { skip }, async () => {
   const { dir, gameBefore, r } = await verifyMode('mode=ok', { soakSec: 2, stages: ['gameplay'] });
   assert.equal(r.status, 'pass', failing(r));
-  for (const name of ['blank', 'frozen', 'fps', 'input', 'audio', 'save', 'viewports', 'soak', 'privacy', 'errors', 'requests', 'stages']) {
+  for (const name of ['blank', 'frozen', 'fps', 'input', 'audio', 'save', 'viewports', 'loop', 'memory', 'privacy', 'errors', 'requests', 'stages']) {
     assert.equal(check(r, name)?.status, 'pass', `${name}: ${failing(r)}`);
   }
   const out = path.join(dir, 'verify');
   assert.equal(JSON.parse(readFileSync(path.join(out, 'report.json'), 'utf8')).status, 'pass');
   assert.ok(existsSync(path.join(out, 'console.log')));
+  assert.ok(r.runs[0].measures.fps.seconds >= 9, `sample window ${r.runs[0].measures.fps.seconds} s (spec: 10 s)`);
   const shots = readdirSync(out).filter((f) => /^step-.*\.png$/.test(f));
   assert.ok(shots.length >= 5, shots.join(', '));
   // R31: the BYO fixture is served from the game folder, which verify never writes into.
   assert.deepEqual(listing(path.join(dir, 'game')), gameBefore);
-  // The import Worker's fixture fetches are seen (privacy covers them) and each file is fetched once.
-  const fx = r.runs[0].requests.filter((q) => q.url.startsWith('/__fixture/') && q.url !== '/__fixture/index.json');
-  assert.deepEqual(fx.map((q) => q.url).sort(), ['/__fixture/GAME.EXE', '/__fixture/data/level1.dat']);
+  // The import Worker's fixture fetches are seen (privacy covers them), each file once, and the game's own
+  // top-level index.json is imported as a game file: the fixture index lives beside the mount (R34).
+  const fx = r.runs[0].requests.filter((q) => q.url.startsWith('/__fixture'));
+  assert.deepEqual(fx.map((q) => q.url).sort(), ['/__fixture.index.json', '/__fixture/GAME.EXE', '/__fixture/data/level1.dat', '/__fixture/index.json']);
 });
 
 test('lane-test black fails blank', { skip }, async () => {
@@ -99,9 +102,9 @@ test('lane-test silent warns audio', { skip }, async () => {
   assert.equal(r.status, 'warn', failing(r));
 });
 
-// One run for both: lane-test with a too-wide element and a POST at start.
+// One run for these: lane-test with a too-wide element, a POST and a popup window at start.
 let misbehaving;
-const misbehave = () => (misbehaving ??= verifyMode('mode=ok&wide=1&post=1'));
+const misbehave = () => (misbehaving ??= verifyMode('mode=ok&wide=1&post=1&popup=1'));
 
 test('mobile viewport overflow fails', { skip }, async () => {
   const { r } = await misbehave();
@@ -118,6 +121,7 @@ test('byo privacy: POST fails', { skip }, async () => {
   const c = check(r, 'privacy');
   assert.equal(c.status, 'fail', failing(r));
   assert.match(c.detail, /POST/);
+  assert.match(c.detail, /popup/, 'a popup is a window whose requests are not checked');
 });
 
 // Review Focus 4. PAG_BROWSER pointing at a missing file pins "no browser" (no fallback to an installed one).
@@ -132,4 +136,18 @@ test('verify exits 3 when no browser and no playwright', async () => {
   assert.equal(r.status, 3, `${r.stdout}\n${r.stderr}`);
   assert.match(r.stdout, /unsupported environment/i);
   assert.ok(Date.now() - t0 < 30000, 'no hang');
+});
+
+test('cli: --soak must be a finite number of seconds up to 3600', async () => {
+  for (const bad of ['Infinity', '3601', '-1', 'abc', '1e9']) {
+    let err = '';
+    assert.equal(await run(['dist', '--soak', bad], { out: () => {}, err: (t) => (err += t) }), 1, bad);
+    assert.match(err, /--soak/, bad);
+  }
+});
+
+test('an unreadable port.json stops the search and is reported', async () => {
+  const { dir, distDir } = await packed();
+  writeFileSync(path.join(dir, 'port.json'), '{ broken');
+  await assert.rejects(verify(distDir, { runner: 'cdp', soakSec: 0 }), /port\.json/);
 });

@@ -7,6 +7,7 @@ import { createReadStream, readFileSync, readdirSync, realpathSync, statSync } f
 import { spawn } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { assertTarget, PolicyError } from './policy.mjs';
+import { fixtureIndexUrl } from '../assets/shell/pure.js';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
@@ -70,9 +71,11 @@ function resolve(base, rawPath, caseFallback, log) {
   return { file: cur, size: st.size };
 }
 
+const FIXTURE_INDEX = fixtureIndexUrl('/__fixture/');
 const sha = (s) => crypto.createHash('sha256').update(String(s)).digest();
 
-// fixtureIndex (verify, R31): served as /__fixture/index.json, so verify never writes an index into the game folder.
+// fixtureIndex (verify, R31/R34): served beside the mount at /__fixture.index.json, so verify never writes an index
+// into the game folder and the index never shadows a game file named index.json.
 export function startServer({ root, host = '127.0.0.1', port = 0, password, fixtureDir, fixtureIndex, caseFallback = false, log = (m) => process.stderr.write(`${m}\n`) }) {
   const base = path.resolve(root);
   const fixture = fixtureDir && path.resolve(fixtureDir);
@@ -94,8 +97,7 @@ export function startServer({ root, host = '127.0.0.1', port = 0, password, fixt
       const given = m ? Buffer.from(m[1], 'base64').toString('utf8').split(':').slice(1).join(':') : '';
       if (!m || !crypto.timingSafeEqual(sha(given), sha(password))) return send(401, { 'WWW-Authenticate': 'Basic realm="port-any-game"' });
     }
-    // ponytail: a game file named index.json at the top of the game folder is shadowed by this; the import reports it.
-    if (fixtureIndex && pathname === '/__fixture/index.json') {
+    if (fixtureIndex && pathname === FIXTURE_INDEX) {
       const json = Buffer.from(JSON.stringify(fixtureIndex));
       return send(200, { 'Content-Type': MIME['.json'], 'Content-Length': json.length }, req.method === 'HEAD' ? undefined : json);
     }

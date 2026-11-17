@@ -1,6 +1,6 @@
 // Find and launch the user's Chrome/Edge for the CDP runner (spike d), and locate the cached Playwright fallback.
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -40,6 +40,7 @@ export function chromeFlags() {
 // Launch with a fresh profile and --remote-debugging-port=0, then read <profile>/DevToolsActivePort (line 1 port,
 // line 2 browser path). close() kills the whole process tree (Windows: taskkill /T /F; POSIX: the process group) and,
 // when the profile was ours, removes it, retrying while dying children still hold files (EBUSY/EPERM).
+// Until close(), process exit, SIGINT and SIGTERM do the same synchronously (then exit 130/143 for the signals).
 export async function launchBrowser({ path: exe, headless = true, userDataDir }) {
   const profile = userDataDir ?? mkdtempSync(path.join(os.tmpdir(), 'pag-verify-'));
   const args = [
@@ -55,13 +56,31 @@ export async function launchBrowser({ path: exe, headless = true, userDataDir })
   });
   const waitGone = (ms) => withTimeout(gone, ms, 'still running').catch(() => {});
 
+  // POSIX: the group is killed even after the browser itself exited, so children of a crashed browser go too (a live
+  // group keeps its id from being reused). Windows: taskkill /T only finds children through a live parent, and a dead
+  // parent's PID may already belong to another program, so it runs only while the browser is up.
+  const killTree = () => {
+    if (!child.pid) return;
+    if (process.platform !== 'win32') { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* group gone */ } }
+    else if (exited === null) spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true, timeout: 10000 });
+  };
+  const ownProfile = !userDataDir;
+  const onExit = () => {
+    killTree();
+    if (ownProfile) try { rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); } catch { /* exiting anyway */ }
+  };
+  const onSignal = (signal) => { onExit(); process.exit(signal === 'SIGINT' ? 130 : 143); };
+  process.once('exit', onExit);
+  process.once('SIGINT', onSignal);
+  process.once('SIGTERM', onSignal);
+
   const close = async () => {
-    if (exited === null && child.pid) {
-      if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
-      else { try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); } }
-      await waitGone(10000);
-    }
-    if (!userDataDir) {
+    process.off('exit', onExit);
+    process.off('SIGINT', onSignal);
+    process.off('SIGTERM', onSignal);
+    killTree();
+    if (exited === null) await waitGone(10000);
+    if (ownProfile) {
       try { await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
       catch (e) { process.stderr.write(`pag verify: could not remove the temporary browser profile ${profile}: ${e.code ?? e.message}\n`); }
     }
@@ -73,7 +92,7 @@ export async function launchBrowser({ path: exe, headless = true, userDataDir })
       if (exited !== null) throw new Error(`${path.basename(exe)} exited while starting (${exited})`);
       let lines = [];
       try { lines = readFileSync(portFile, 'utf8').split(/\r?\n/); } catch { /* not written yet */ }
-      if (lines[1]) return { wsEndpoint: `ws://127.0.0.1:${lines[0]}${lines[1]}`, pid: child.pid, close };
+      if (lines[1]) return { wsEndpoint: `ws://127.0.0.1:${lines[0]}${lines[1]}`, pid: child.pid, userDataDir: profile, close };
       if (Date.now() - t0 > 30000) throw new Error(`${path.basename(exe)} did not open a DevTools port within 30 s`);
     }
   } catch (e) {

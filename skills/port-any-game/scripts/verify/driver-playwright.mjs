@@ -7,6 +7,9 @@ import { cacheDir } from '../lib/fsx.mjs';
 import { chromeFlags, playwrightEntry } from './browser.mjs';
 import { isCrossOrigin } from './checks.mjs';
 
+// Requests the page itself cancelled (navigation, abort()): Chromium, Firefox, WebKit wording.
+const CANCELLED = /ERR_ABORTED|NS_BINDING_ABORTED|cancell?ed/i;
+
 export async function openPlaywright({ browser = 'chromium', headless = true, initScript = '' }) {
   const entry = playwrightEntry();
   if (!entry) throw new Error('Playwright is not installed (run: pag setup playwright --yes)');
@@ -34,8 +37,9 @@ export async function openPlaywright({ browser = 'chromium', headless = true, in
       onRequest: (cb) => on('request', (r) => cb({ url: r.url(), method: r.method(), hasBody: r.postDataBuffer() !== null, crossOrigin: isCrossOrigin(r.url(), origin) })),
       onResponse(cb) {
         on('response', (r) => cb({ url: r.url(), status: r.status() }));
-        on('requestfailed', (r) => { const error = r.failure()?.errorText; if (error !== 'net::ERR_ABORTED') cb({ url: r.url(), status: 0, error }); });
+        on('requestfailed', (r) => { const error = r.failure()?.errorText; if (!CANCELLED.test(error ?? '')) cb({ url: r.url(), status: 0, error }); });
       },
+      onPopup: (cb) => on('popup', (p) => cb({ url: p.url() })),
       close: () => b.close(),
     };
   } catch (e) {

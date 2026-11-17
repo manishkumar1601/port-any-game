@@ -168,6 +168,10 @@ export function parseVerifyParams(search) {
   return { importUrl, interruptAfter: n > 0 ? n : 0, stage: q.get('verify_stage') };
 }
 
+// R34: the verify_import file list sits beside the mount ('/__fixture/' -> '/__fixture.index.json'), never inside it,
+// so it cannot shadow a game file named index.json.
+export const fixtureIndexUrl = (importUrl) => `${importUrl.replace(/\/+$/, '')}.index.json`;
+
 // Reads the stored (method 0) zips that exportSaves writes. Returns [{name, data}].
 export function readStoredZip(u8) {
   const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);

@@ -4,7 +4,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { normalizePath, matchManifest, Sha256, fileHasher, parseVerifyParams, readStoredZip, importLayout } from '../../skills/port-any-game/assets/shell/pure.js';
+import { normalizePath, matchManifest, Sha256, fileHasher, parseVerifyParams, readStoredZip, importLayout, fixtureIndexUrl } from '../../skills/port-any-game/assets/shell/pure.js';
 import { importFiles } from '../../skills/port-any-game/assets/shell/import.js';
 import { createZip } from '../../skills/port-any-game/assets/shell/zip.js';
 import { sha256File } from '../../skills/port-any-game/scripts/lib/fsx.mjs';
@@ -107,6 +107,12 @@ test('parseVerifyParams: same-origin import path only', () => {
   assert.equal(parseVerifyParams('?verify_import=/__fixture').importUrl, '/__fixture/');
   assert.equal(parseVerifyParams('?verify_interrupt_after=-2').interruptAfter, 0);
   assert.equal(parseVerifyParams('?verify_interrupt_after=abc').interruptAfter, 0);
+});
+
+test('fixtureIndexUrl puts the index beside the mount, never inside it (R34)', () => {
+  assert.equal(fixtureIndexUrl('/__fixture/'), '/__fixture.index.json');
+  assert.equal(fixtureIndexUrl('/a/b/'), '/a/b.index.json');
+  assert.equal(fixtureIndexUrl(parseVerifyParams('?verify_import=/__fixture').importUrl), '/__fixture.index.json');
 });
 
 test('readStoredZip round-trips createZip and rejects other methods', () => {

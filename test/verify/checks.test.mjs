@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { frameStats, meanAbsDiff, judge, isCrossOrigin } from '../../skills/port-any-game/scripts/verify/checks.mjs';
+import { frameStats, meanAbsDiff, judge, isCrossOrigin, longestStall, heapGrowth } from '../../skills/port-any-game/scripts/verify/checks.mjs';
 
 const W = 64;
 const H = 48;
@@ -40,7 +40,13 @@ test('judge fails all-blank', () => {
   const r = judge({ frames: Array(10).fill(dark) });
   assert.equal(status(r, 'blank'), 'fail');
   assert.equal(r.status, 'fail');
-  assert.equal(status(judge({ frames: [dark, dark, ...Array(8).fill(live)] }), 'blank'), 'warn');
+  // note 05 §7c: 1-3 of 10 blank samples (a fade, a loading screen) warn; more fail. The same share for 20 samples.
+  const some = (blank, of) => status(judge({ frames: [...Array(blank).fill(dark), ...Array(of - blank).fill(live)] }), 'blank');
+  assert.equal(some(1, 10), 'warn');
+  assert.equal(some(3, 10), 'warn');
+  assert.equal(some(4, 10), 'fail');
+  assert.equal(some(6, 20), 'warn');
+  assert.equal(some(7, 20), 'fail');
   assert.equal(status(judge({ frames: Array(10).fill(live) }), 'blank'), 'pass');
 });
 
@@ -74,6 +80,7 @@ test('judge audio, privacy, viewports and errors', () => {
   assert.equal(audio({ running: false }), 'fail');
   assert.equal(status(judge({ privacy: { withBody: ['POST /'], crossOrigin: [] } }), 'privacy'), 'fail');
   assert.equal(status(judge({ privacy: { withBody: [], crossOrigin: [] } }), 'privacy'), 'pass');
+  assert.equal(status(judge({ privacy: { withBody: [], crossOrigin: [], popups: ['about:blank'] } }), 'privacy'), 'fail');
   const vp = (sw) => status(judge({ viewports: [{ name: 'mobile', w: 390, h: 844, scrollWidth: sw, innerWidth: 390 }] }), 'viewports');
   assert.equal(vp(390), 'pass');
   assert.equal(vp(1000), 'fail');
@@ -92,4 +99,39 @@ test('isCrossOrigin ignores data: and blob: of the same origin', () => {
   assert.equal(isCrossOrigin('http://localhost:5000/x', o), true);
   assert.equal(isCrossOrigin('data:image/png;base64,AA==', o), false);
   assert.equal(isCrossOrigin('blob:http://127.0.0.1:5000/1234', o), false);
+});
+
+test('judge loop: a gameFrames stall over 2 s fails, in the sample window or the soak', () => {
+  const series = (frames, step = 0.5) => frames.map((f, i) => ({ t: i * step, frames: f }));
+  assert.equal(longestStall(series([1, 2, 3, 4])), 0);
+  assert.equal(longestStall(series([1, 2, 2, 2, 2, 2, 3])), 2);
+  assert.equal(longestStall(series([1, 2, 2, 2, 2, 2, 2])), 2.5, 'a stall still running at the end counts');
+  const loop = (l) => status(judge({ loop: l }), 'loop');
+  assert.equal(loop({ window: series([1, 2, 2, 2, 2, 2, 3]) }), 'pass', '2 s is allowed');
+  assert.equal(loop({ window: series([1, 2, 2, 2, 2, 2, 2, 3]) }), 'fail', '2.5 s is not');
+  assert.equal(loop({ window: series([1, 2, 3]), soak: series([5, 6, 6, 6, 6, 7], 1) }), 'fail', 'the soak is checked too (3 s at 1 s spacing)');
+  assert.equal(loop({ window: series([1, 2, 3]), soak: series([5, 6, 6, 6, 7, 8], 0.5) }), 'pass');
+  assert.match(judge({ loop: { window: series([1, 2]), soak: series([5, 5, 5, 5], 1) } }).checks[0].detail, /soak/);
+});
+
+test('judge memory: < 5 %/min pass, 5-10 warn, > 10 fail, unmeasurable is skip', () => {
+  const mem = (g) => status(judge({ memory: { seconds: 60, growthPctPerMin: g } }), 'memory');
+  assert.equal(mem(0), 'pass');
+  assert.equal(mem(4.99), 'pass');
+  assert.equal(mem(5), 'warn');
+  assert.equal(mem(10), 'warn');
+  assert.equal(mem(10.01), 'fail');
+  assert.equal(mem(null), 'skip');
+  assert.match(judge({ memory: { seconds: 60, growthPctPerMin: null } }).checks[0].detail, /heap not measurable/);
+  assert.equal(judge({ memory: { seconds: 60, growthPctPerMin: null } }).status, 'pass', 'skip is neither warn nor fail');
+});
+
+test('heapGrowth compares post-GC floors and ignores growth under 1 MiB', () => {
+  const MiB = 1024 * 1024;
+  assert.equal(heapGrowth([10 * MiB, 10.5 * MiB, 10.9 * MiB], 60), 0, 'under the 1 MiB noise floor');
+  assert.equal(heapGrowth([10 * MiB, 11 * MiB, 12 * MiB], 60), 20, '2 MiB on 10 MiB in a minute');
+  // Saw-tooth: the minimum of the first and the last third, not the endpoints.
+  assert.equal(heapGrowth([10 * MiB, 30 * MiB, 10 * MiB, 30 * MiB, 10 * MiB, 30 * MiB], 60), 0);
+  assert.equal(heapGrowth([10 * MiB, null], 60), null, 'no heap numbers (not Chromium)');
+  assert.equal(heapGrowth([10 * MiB], 60), null);
 });
