@@ -37,6 +37,10 @@ export function chromeFlags() {
   return [...flags, ...(process.env.PAG_CHROME_FLAGS ?? '').split(' ').filter(Boolean)];
 }
 
+// Dying browser children hold profile files for a while (EBUSY/EPERM). rm retries with a linear backoff (100 ms, 200 ms,
+// ...): 24 retries poll for up to ~30 s in all. Under heavy load a file stayed locked for ~13 s after taskkill.
+const RM_PROFILE = { recursive: true, force: true, maxRetries: 24, retryDelay: 100 };
+
 // Launch with a fresh profile and --remote-debugging-port=0, then read <profile>/DevToolsActivePort (line 1 port,
 // line 2 browser path). close() kills the whole process tree (Windows: taskkill /T /F; POSIX: the process group) and,
 // when the profile was ours, removes it, retrying while dying children still hold files (EBUSY/EPERM).
@@ -62,12 +66,13 @@ export async function launchBrowser({ path: exe, headless = true, userDataDir })
   const killTree = () => {
     if (!child.pid) return;
     if (process.platform !== 'win32') { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* group gone */ } }
-    else if (exited === null) spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true, timeout: 10000 });
+    // Under heavy load taskkill itself was seen taking 20 s (usually 2-4 s); 60 s is generous but finite.
+    else if (exited === null) spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true, timeout: 60000 });
   };
   const ownProfile = !userDataDir;
   const onExit = () => {
     killTree();
-    if (ownProfile) try { rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); } catch { /* exiting anyway */ }
+    if (ownProfile) try { rmSync(profile, RM_PROFILE); } catch { /* exiting anyway */ }
   };
   const onSignal = (signal) => { onExit(); process.exit(signal === 'SIGINT' ? 130 : 143); };
   process.once('exit', onExit);
@@ -81,7 +86,7 @@ export async function launchBrowser({ path: exe, headless = true, userDataDir })
     killTree();
     if (exited === null) await waitGone(10000);
     if (ownProfile) {
-      try { await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
+      try { await rm(profile, RM_PROFILE); }
       catch (e) { process.stderr.write(`pag verify: could not remove the temporary browser profile ${profile}: ${e.code ?? e.message}\n`); }
     }
   };

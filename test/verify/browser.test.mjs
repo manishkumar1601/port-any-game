@@ -32,8 +32,10 @@ async function launchInChild(mode) {
   for await (const chunk of child.stdout) { out += chunk; if (out.includes('\n')) break; }
   return { child, exited, ...JSON.parse(out) };
 }
+// The child exits only after its cleanup ran (taskkill up to 60 s, profile removal up to ~30 s under load), so this
+// rarely waits; the bounded poll covers process teardown that finishes after the kill returns.
 async function assertCleaned({ pid, profile }) {
-  for (let i = 0; i < 50 && alive(pid); i++) await sleep(100);
+  for (const end = Date.now() + 30000; (alive(pid) || existsSync(profile)) && Date.now() < end;) await sleep(100);
   assert.equal(alive(pid), false, `browser ${pid} still running`);
   assert.equal(existsSync(profile), false, `profile ${profile} left behind`);
 }

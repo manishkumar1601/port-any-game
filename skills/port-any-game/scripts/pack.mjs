@@ -14,6 +14,7 @@ import { normalizePath } from '../assets/shell/pure.js';
 
 const ASSETS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'assets');
 const SHELL_DIR = path.join(ASSETS, 'shell');
+const GPL2_TEXT = path.join(ASSETS, 'licenses', 'GPL-2.0.txt');
 const MODES = ['byo', 'bundled', 'bundled-public'];
 const JUNK = /^(\.DS_Store|Thumbs\.db|desktop\.ini)$/i; // OS litter differs per copy; never ask the user for it
 const USAGE = 'usage: pag pack [portDir] [--mode byo|bundled|bundled-public]\n';
@@ -165,6 +166,8 @@ function licenseText(e, dir) {
   if (/GPL/i.test(e.license ?? '')) lines.push(`The complete corresponding source code is available at ${e.source} (tag/version ${e.version}).`);
   const lf = e.licenseFile && path.join(dir, ...e.licenseFile.split('/'));
   if (lf && existsSync(lf)) lines.push('', readFileSync(lf, 'utf8'));
+  // GPL-2.0 §1: the licence text goes with the binary (js-dos ships none of its own).
+  if (/^GPL-2\.0(\+|-only|-or-later)?$/.test(e.license ?? '')) lines.push('', readFileSync(GPL2_TEXT, 'utf8').trimEnd());
   return `${lines.join('\n')}\n`;
 }
 

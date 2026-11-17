@@ -176,6 +176,7 @@ async function dosByo() {
   const lic = readFileSync(path.join(r.distDir, 'LICENSES', 'js-dos.txt'), 'utf8');
   assert.match(lic, /^js-dos 8\.5\.4\nLicense: GPL-2\.0\nSource: https:\/\/github\.com\/caiiiycuk\/js-dos\n/);
   assert.match(lic, /complete corresponding source code is available at https:\/\/github\.com\/caiiiycuk\/js-dos \(tag\/version 8\.5\.4\)/);
+  assert.match(lic, /GNU GENERAL PUBLIC LICENSE\s+Version 2, June 1991/, 'the GPL-2.0 text itself');
 }
 
 export const CASES = {

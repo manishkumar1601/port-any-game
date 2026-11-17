@@ -18,7 +18,13 @@ const { toolDir } = await import('../skills/port-any-game/scripts/setup.mjs');
 const { startServer, parseHeadersFile } = await import('../skills/port-any-game/scripts/serve.mjs');
 
 const ADAPTER = fileURLToPath(new URL('./fixtures/lane-test/adapter.js', import.meta.url));
+const GPL2 = fileURLToPath(new URL('../skills/port-any-game/assets/licenses/GPL-2.0.txt', import.meta.url));
 const sha = (b) => createHash('sha256').update(b).digest('hex');
+
+test('GPL-2.0 text is the verbatim gnu.org file', () => {
+  // sha256 of https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt as fetched 2026-11-18 (see assets/licenses/README.md).
+  assert.equal(sha(readFileSync(GPL2)), 'edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6');
+});
 
 const LOCK = { 'fake-rt': { name: 'fake-rt', version: '1.2.3', license: 'GPL-2.0', source: 'https://example.invalid/fake-rt', licenseFile: 'COPYING' } };
 const tool = toolDir(LOCK['fake-rt']);
@@ -113,6 +119,9 @@ test('pack writes shell, manifest, _headers, robots, LICENSES', async () => {
   const lic = readFileSync(d('LICENSES', 'fake-rt.txt'), 'utf8');
   for (const s of ['fake-rt', '1.2.3', 'License: GPL-2.0', 'Source: https://example.invalid/fake-rt', 'GNU GENERAL PUBLIC LICENSE Version 2 (fake text)']) assert.ok(lic.includes(s), s);
   assert.match(lic, /complete corresponding source.*https:\/\/example\.invalid\/fake-rt.*1\.2\.3/is);
+  // GPL-2.0 §1: the licence text travels with the binary; appended after the notice lines.
+  assert.ok(lic.indexOf('GNU GENERAL PUBLIC LICENSE\n                       Version 2, June 1991') > lic.indexOf('complete corresponding source'), 'GPL-2.0 text after the notice');
+  assert.ok(lic.endsWith(readFileSync(GPL2, 'utf8')));
   assert.match(readFileSync(d('LICENSES', 'port-any-game-shell.txt'), 'utf8'), /MIT License[\s\S]*Permission is hereby granted/);
   assert.deepEqual(readdirSync(path.join(dir, 'work')), [], 'no temp dirs left behind');
 

@@ -11,7 +11,7 @@ const { LANES } = await import('../../skills/port-any-game/scripts/lanes/index.m
 const { loadLock, toolDir } = await import('../../skills/port-any-game/scripts/setup.mjs');
 const { makeAnimCom } = await import('../fixtures/make-dos-com.mjs');
 const { makeMZ } = await import('../fixtures/make-pe.mjs');
-const { keyCode } = await import('../../skills/port-any-game/assets/lanes/dos-jsdos/adapter.js');
+const { keyCode, routeKey } = await import('../../skills/port-any-game/assets/lanes/dos-jsdos/adapter.js');
 const lane = LANES['dos-jsdos'];
 
 const tmp = mkdtempSync(path.join(tmpdir(), 'pag-jd-'));
@@ -103,6 +103,19 @@ test('keyCode follows the js-dos 8.5.4 KBD_ table', () => {
     ControlRight: 345, F1: 290, F12: 301, Numpad5: 325, NumpadEnter: 335, Space: 32, Backquote: 96 };
   for (const [code, k] of Object.entries(want)) assert.equal(keyCode(code), k, code);
   assert.equal(keyCode('MetaLeft'), undefined);
+});
+
+test('routeKey leaves browser shortcuts and shell controls alone, never sticks a key', () => {
+  const on = (tag) => ({ closest: (sel) => (tag && sel.split(', ').includes(tag) ? {} : null) });
+  const ev = (type, code, o = {}) => ({ type, code, target: on(o.tag), ctrlKey: false, metaKey: false, altKey: false, ...o });
+  assert.deepEqual(routeKey(ev('keydown', 'KeyR')), { code: 82, pressed: true, prevent: true });
+  // Ctrl+R, Alt+Tab, Ctrl+C: the browser keeps them (no preventDefault); DOSBox still sees them (Ctrl fires, Alt strafes).
+  for (const m of ['ctrlKey', 'altKey', 'metaKey']) assert.deepEqual(routeKey(ev('keydown', 'KeyR', { [m]: true })), { code: 82, pressed: true, prevent: false });
+  assert.equal(routeKey(ev('keydown', 'Tab', { tag: 'button' })), null, 'typed at a shell control');
+  assert.equal(routeKey(ev('keydown', 'F5', { tag: 'input' })), null);
+  // A release always reaches DOSBox: ArrowUp released while Ctrl is held, or over a control, must not stay down.
+  assert.deepEqual(routeKey(ev('keyup', 'ArrowUp', { ctrlKey: true, tag: 'button' })), { code: 265, pressed: false, prevent: false });
+  assert.equal(routeKey(ev('keydown', 'MetaLeft')), null);
 });
 
 const skip = skipReason();

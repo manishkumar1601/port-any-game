@@ -44,6 +44,17 @@ for (let i = 0; i < 10; i++) { KEYS[`Digit${i}`] = 48 + i; KEYS[`Numpad${i}`] = 
 for (let i = 1; i <= 12; i++) KEYS[`F${i}`] = 289 + i;
 export const keyCode = (code) => KEYS[code];
 
+// A key event -> {code, pressed, prevent} for DOSBox, or null to leave it to the page. A press typed at a shell
+// control stays there. Ctrl/Alt/Meta combos keep their browser meaning (Ctrl+R, Ctrl+C) but still reach DOSBox:
+// DOS games fire with Ctrl and strafe with Alt, and dropping them would also drop arrow keys held while firing.
+// A release always goes through, so no key sticks down in DOSBox.
+export function routeKey(e) {
+  const code = KEYS[e.code];
+  const pressed = e.type === 'keydown';
+  if (code === undefined || (pressed && e.target?.closest?.('input, button, textarea, select'))) return null;
+  return { code, pressed, prevent: !(e.ctrlKey || e.metaKey || e.altKey) };
+}
+
 let ci = null;
 let frames = 0;
 let running = true;
@@ -58,12 +69,11 @@ const loadScript = (src) => new Promise((resolve, reject) => {
 });
 
 function onKey(e) {
-  const k = KEYS[e.code];
-  if (!ci || !running || k === undefined) return;
-  e.preventDefault();
-  const pressed = e.type === 'keydown';
-  if (pressed) down.add(k); else down.delete(k);
-  ci.sendKeyEvent(k, pressed); // repeats too, like a real keyboard's typematic make codes (and js-dos's own UI)
+  const r = ci && running && routeKey(e);
+  if (!r) return;
+  if (r.prevent) e.preventDefault();
+  if (r.pressed) down.add(r.code); else down.delete(r.code);
+  ci.sendKeyEvent(r.code, r.pressed); // repeats too, like a real keyboard's typematic make codes (and js-dos's own UI)
 }
 
 function releaseKeys() {

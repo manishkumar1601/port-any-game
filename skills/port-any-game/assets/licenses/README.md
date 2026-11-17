@@ -1,0 +1,1 @@
+`GPL-2.0.txt` is a verbatim copy of https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt, fetched 2026-11-18 (SHA-256 `edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6`); verbatim copying of the licence document is permitted by the FSF. `pag pack` appends it to `LICENSES/<tool>.txt` for GPL-2.0 runtimes (js-dos).
