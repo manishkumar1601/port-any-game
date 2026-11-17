@@ -3,6 +3,7 @@
 const COMMANDS = {
   survey: () => import('./survey/survey.mjs'),
   new: () => import('./new.mjs'),
+  serve: () => import('./serve.mjs'),
   doctor: () => import('./doctor.mjs'),
   setup: () => import('./setup.mjs'),
   // guard fails open (Copilot hooks fail closed on a crash): any import failure exits 0 silently.
