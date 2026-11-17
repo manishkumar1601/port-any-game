@@ -1,0 +1,27 @@
+{
+  "ruffle-selfhosted": {
+    "name": "ruffle-selfhosted",
+    "version": "nightly-2026-11-10",
+    "url": "https://github.com/ruffle-rs/ruffle/releases/download/nightly-2026-11-10/ruffle-nightly-2026_11_10-web-selfhosted.zip",
+    "sha256": "62f434ce358cb77aa0798176a36933ea93daf4c0711b04f2c901900f7fc1b730",
+    "size": 10438078,
+    "archive": "zip",
+    "licenseFile": "LICENSE.md"
+  },
+  "js-dos": {
+    "name": "js-dos",
+    "version": "8.5.4",
+    "url": "https://registry.npmjs.org/js-dos/-/js-dos-8.5.4.tgz",
+    "sha256": "df90c94ec6a2598f418b8065f3cb644e51561d09925f33c8994adacc5f12dd83",
+    "size": 20563073,
+    "archive": "tgz",
+    "strip": 1,
+    "licenseFile": "package.json"
+  },
+  "playwright": {
+    "name": "playwright",
+    "version": "1.65.1",
+    "special": "npm",
+    "licenseFile": "node_modules/playwright/LICENSE"
+  }
+}
