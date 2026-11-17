@@ -49,7 +49,7 @@ Test page: an animated 2D canvas (hsl colour per rAF frame) and a WebGL canvas (
 | Edge | 2 | 49.5 / 41.9 (0.0) | 134.3 / 30.3 (0.0) | 3.00 |
 | Chrome | 0 | 197.1 / 11.8 (0.0) | 142.7 / 28.1 (0.0) | n/a |
 | Chrome | 1 | 120.6 / 27.4 (0.0) | 140.5 / 28.7 (0.0) | 11.32 |
-| Chrome | 2 | 45.2 / 42.8 (0.0) | 140.5 / 28.7 (0.0) | 9.18 |
+| Chrome | 2 | 45.2 / 42.8 (0.0) | 140.5 / 28.7 (0.0) (identical to shot 1: WebGL animation not demonstrated in Chrome) | 9.18 |
 
 Both canvases are non-black in both browsers, and the 2D canvas changes between shots. The WebGL region varied across shots in Edge and was identical for shots 1 and 2 in Chrome, which is plausible at that sampling interval (the clear colour cycles over 60 frames) but means "WebGL animates" is only strongly shown for Edge. A page `window.__frames` counter advanced roughly 80 to 130 frames between shots (about 0.6 s apart including capture time) with the throttling flags set, so rAF was not throttled. Screenshot size was 756x488 (Edge) / 764x485 (Chrome) because the default headless window is about 800x600. Pass `--window-size=W,H` or `Emulation.setDeviceMetricsOverride` when the verify needs a fixed viewport.
 
@@ -57,7 +57,7 @@ The js-dos spike (note e) is a second data point: with the same launch flags the
 
 ## `Page.addScriptToEvaluateOnNewDocument` and iframes
 
-Registered `window.__inj = 42` before navigation. Both the main frame and a same-origin `<iframe src="frame.html">` read `42` (the iframe logged it from its own script at load, so it ran before page scripts; also read back via `contentWindow.__inj`). Verified in Edge and Chrome. Cross-origin iframes were not tested. Note the script also applies to all later navigations in the session; no `runImmediately` flag was needed.
+Registered `window.__inj = 42` before navigation. Both the main frame and a same-origin `<iframe src="frame.html">` read `42` (the iframe logged it from its own script at load, so it ran before page scripts; also read back via `contentWindow.__inj`). Verified in Edge and Chrome. Cross-origin iframes were not tested. Warning for Task 14: cross-origin / out-of-process (OOPIF) iframes may need `Target.setAutoAttach {autoAttach:true, flatten:true, waitForDebuggerOnStart}` handling to reach their sessions (untested). Note the script also applies to all later navigations in the session; no `runImmediately` flag was needed.
 
 ## Gotchas
 
@@ -66,7 +66,6 @@ Registered `window.__inj = 42` before navigation. Both the main frame and a same
 - A freshly created user-data-dir is required each run (otherwise a running instance can hijack the launch and `DevToolsActivePort` is stale).
 - The first cold launch of each browser took 4 to 5 s to publish the port file; warm launches about 1 s. Budget for it in the ready-time thresholds.
 - A page `<script>` that declares top-level `const q` collides with globals in some third-party scripts (hit while building the js-dos test page); unrelated to CDP but wrap test scripts in an IIFE.
-- Bash hook in this repo blocks curl/wget; `fetch` in Node covers `/json/version`.
 
 ## Minimal working sketch
 

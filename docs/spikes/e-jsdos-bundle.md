@@ -5,7 +5,7 @@ js-dos obtained with `npm pack js-dos@8.5.4` into `docs/spikes/scratch/jsdos/` (
 
 ## Verdict
 
-**js-dos lane viable without its MCP: YES**, with one caveat that changes the verify design: in this environment the js-dos UI canvas never painted (see "Frame sampling"), so verify must read frames from the emulator's command interface (`ci`), not from screenshots or the canvas. macOS and Linux: **unverified, to be covered by Task 23 CI** (ruling R12).
+**js-dos lane viable without its MCP: YES for verify via `ci` frames; player UI painting under CDP is NOT demonstrated.** Caveat that changes the verify design: in this environment the js-dos UI canvas never painted (see "Frame sampling"), so verify must read frames from the emulator's command interface (`ci`), not from screenshots or the canvas. macOS and Linux: **unverified, to be covered by Task 23 CI** (ruling R12).
 
 ## Test program and bundle
 
@@ -39,7 +39,7 @@ Two layers exist; both work.
     pathPrefix: 'jsdos/emulators/',   // where emulators.js / wdosbox*.{js,wasm} / wlibzip.* live; must end with '/'
     url: 'anim.jsdos',                // bundle by URL (http(s) or blob:)
     autoStart: true,                  // else a Play button must be clicked
-    backend: 'dosbox',                // or 'dosboxX' (default if omitted was not checked)
+    backend: 'dosbox',                // or 'dosboxX'. Task 18 must pass `backend` explicitly: the default when omitted was NOT checked
     onEvent: (ev, arg) => { if (ev === 'ci-ready') window.ci = arg; }   // arg is the command interface
   });
 </script>
@@ -47,7 +47,7 @@ Two layers exist; both work.
 
 - Returns an object with `stop`, `save`, `setPaused`, `setVolume`, `setBackend`, `setWorkerThread`, `setOffscreenCanvas`, `setRenderBackend`, `setAutoStart`, `setKiosk`, `setFullScreen`, `getVersion`, `editor` (which has `open(Uint8Array)`, `state()`, etc.), and more.
 - Events seen in order: `emu-ready`, `bnd-play`, `ci-ready`. `ci-ready` passes the **command interface** `ci` as the second argument. This is how to reach the running emulator without the UI.
-- Option names tried that were accepted without error: `pathPrefix`, `url`, `autoStart`, `backend`, `onEvent`, `dosboxConf`, `initFs`. `noSideBar`/`noFullscreen`/`noCloud` did not hide the sidebar (probably wrong names or other spelling; not investigated). Without `autoStart` the player shows a Play button and nothing runs until clicked.
+- Option names tried that were accepted without error: `pathPrefix`, `url`, `autoStart`, `backend`, `onEvent`, `dosboxConf`, `initFs`. `noSideBar`, `noFullscreen` and `noCloud` do not appear anywhere in the js-dos 8.5.4 `dist/*.d.ts` or `js-dos.js` (grepped), so they are not valid 8.5.4 options and the sidebar cannot be hidden with them. Without `autoStart` the player shows a Play button and nothing runs until clicked.
 
 ### B. Bytes instead of a URL (all three verified: emulator ran and animated)
 
@@ -75,9 +75,9 @@ Observed in the server request log (everything else in `dist/` was never request
 | UI | `js-dos.js` (325 KB), `js-dos.css` |
 | Always (loader + zip) | `emulators/emulators.js` (91 KB), `emulators/wlibzip.js`, `emulators/wlibzip.wasm` (112 KB) |
 | Backend `dosbox` (default in my tests) | `emulators/wdosbox.js` (115 KB), `emulators/wdosbox.wasm` (1.46 MB) |
-| Backend `dosboxX` (adds) | `emulators/wdosbox-x.js` (286 KB), `emulators/wdosbox-x.wasm` (8.0 MB) |
+| Backend `dosboxX` (adds; requested only when `backend:'dosboxX'` was passed) | `emulators/wdosbox-x.js` (286 KB), `emulators/wdosbox-x.wasm` (8.0 MB) |
 
-Not requested in any test: `file-explorer.*`, `fileexplorer_*`, `webrtcnet.*` (IPX networking), `wdosbox-x-jspi.*`, `wdosbox-x-dbg.*`, `*.map`, `*.symbols`, `types/`. `wasm` must be served as `application/wasm`. `pathPrefix` (UI) / `emulators.pathPrefix` (raw) must point at the folder that contains `emulators.js`'s siblings. A minimal self-hosted set for the `dosbox` backend is about 1.7 MB; with `dosboxX` about 9.9 MB. The `dosboxX` backend needs 10 to 15 s to become ready in this environment (versus a few seconds for `dosbox`), which matters for the ready-time budget.
+Request log, run with `backend` `dosbox` (and via the raw `dosboxDirect`/`dosboxWorker` API): only `wdosbox.*` was fetched, no `wdosbox-x.*`, so the `dosbox` backend alone avoids the dosboxX files (observed; the omitted-`backend` default is unchecked). Not requested in any test: `file-explorer.*`, `fileexplorer_*`, `webrtcnet.*` (IPX networking), `wdosbox-x-jspi.*`, `wdosbox-x-dbg.*`, `*.map`, `*.symbols`, `types/`. `wasm` must be served as `application/wasm`. `pathPrefix` (UI) / `emulators.pathPrefix` (raw) must point at the folder that contains `emulators.js`'s siblings. A minimal self-hosted set for the `dosbox` backend is about 1.7 MB; with `dosboxX` about 9.9 MB. The `dosboxX` backend needs 10 to 15 s to become ready in this environment (versus a few seconds for `dosbox`), which matters for the ready-time budget.
 
 ## COOP/COEP
 
