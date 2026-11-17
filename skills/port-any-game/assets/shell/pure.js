@@ -13,6 +13,14 @@ export function normalizePath(p) {
   return segs.length ? segs.join('/') : null;
 }
 
+// OPFS layout for one manifest path. The game file lives under game/; its import temp file and .done marker live in
+// a separate tree that holds nothing else, so no game file name (say "X.done") can collide with them.
+export function importLayout(p) {
+  const segs = p.split('/');
+  const name = segs.pop();
+  return { gameDir: ['game', ...segs], name, stateDir: ['.pag-import', ...segs], part: `${name}.part`, done: `${name}.done` };
+}
+
 // Exact path first, then case-insensitive when exactly one entry folds to it (DOS/Windows games ignore case).
 export function pathLookup(entries, key = (e) => e) {
   const exact = new Map();

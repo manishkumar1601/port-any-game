@@ -64,8 +64,8 @@ function missingCapabilities(req = {}, needsCoi = false, byo = false) {
   return missing;
 }
 
-async function getJson(url) {
-  const r = await fetch(url);
+async function getJson(url, init) {
+  const r = await fetch(url, init);
   if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
   return r.json();
 }
@@ -234,7 +234,7 @@ async function boot() {
 
   setState('checking', 'Checking this browser…');
   try {
-    config = await getJson('shell.json');
+    config = await getJson('shell.json', { cache: 'no-store' }); // it names the content-hashed runtime folder (R30)
     if (config.schema !== 1) throw new Error(`shell.json schema ${config.schema} is not supported by this shell`);
     $('title').textContent = config.game_id;
     document.title = config.game_id;

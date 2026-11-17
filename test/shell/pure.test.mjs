@@ -4,7 +4,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { normalizePath, matchManifest, Sha256, fileHasher, parseVerifyParams, readStoredZip } from '../../skills/port-any-game/assets/shell/pure.js';
+import { normalizePath, matchManifest, Sha256, fileHasher, parseVerifyParams, readStoredZip, importLayout } from '../../skills/port-any-game/assets/shell/pure.js';
+import { importFiles } from '../../skills/port-any-game/assets/shell/import.js';
 import { createZip } from '../../skills/port-any-game/assets/shell/zip.js';
 import { sha256File } from '../../skills/port-any-game/scripts/lib/fsx.mjs';
 
@@ -119,6 +120,56 @@ test('readStoredZip round-trips createZip and rejects other methods', () => {
   new DataView(bad.buffer).setUint16(cd + 10, 8, true);
   assert.throws(() => readStoredZip(bad), /stored|method/i);
   assert.throws(() => readStoredZip(enc('not a zip')), /zip/i);
+});
+
+test('importLayout keeps .part/.done out of the game tree and collision-free', () => {
+  assert.deepEqual(importLayout('data/X.dat'), { gameDir: ['game', 'data'], name: 'X.dat', stateDir: ['.pag-import', 'data'], part: 'X.dat.part', done: 'X.dat.done' });
+  const names = ['X', 'X.done', 'X.part', 'X.done.part', 'X.part.done', 'data/X', 'data/X.done'];
+  const gamePaths = new Set();
+  const statePaths = [];
+  for (const p of names) {
+    const L = importLayout(p);
+    gamePaths.add([...L.gameDir, L.name].join('/'));
+    statePaths.push([...L.stateDir, L.part].join('/'), [...L.stateDir, L.done].join('/'));
+  }
+  assert.equal(gamePaths.size, names.length);
+  assert.equal(new Set(statePaths).size, statePaths.length, 'no two temp/marker files share a path');
+  for (const s of statePaths) assert.ok(!s.startsWith('game/') && !gamePaths.has(s), s);
+});
+
+// importFiles coordination with a fake Worker (Node has no OPFS: every file counts as not done).
+const MANIFEST = { files: [{ path: 'a.bin', size: 1, sha256: 'x' }, { path: 'b.bin', size: 1, sha256: 'y' }] };
+const CANDIDATES = [{ path: 'a.bin', size: 1, url: '/f/a.bin' }, { path: 'b.bin', size: 1, url: '/f/b.bin' }];
+const fakeWorker = (behave) => () => {
+  const w = { posted: [], terminated: false, postMessage(m) { w.posted.push(m.path); behave(w, m); }, terminate() { w.terminated = true; } };
+  if (behave.onCreate) setTimeout(() => behave.onCreate(w));
+  return w;
+};
+const within = (p, ms = 2000) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('importFiles hung')), ms))]);
+
+test('importFiles copies per file and records per-file failures', async () => {
+  let worker;
+  const r = await within(importFiles(MANIFEST, CANDIDATES, {
+    createWorker: fakeWorker((w, m) => { worker = w; setTimeout(() => w.onmessage({ data: m.path === 'a.bin' ? { ok: true } : { ok: false, error: 'content differs' } })); }),
+  }));
+  assert.equal(r.copied, 1);
+  assert.deepEqual(r.failed, [{ path: 'b.bin', error: 'content differs' }]);
+  assert.deepEqual(worker.posted, ['a.bin', 'b.bin']);
+  assert.ok(worker.terminated);
+});
+
+test('importFiles rejects (never hangs) when the Worker fails', async () => {
+  // Fails on the first message: the remaining files are not attempted.
+  let w1;
+  await assert.rejects(within(importFiles(MANIFEST, CANDIDATES, {
+    createWorker: fakeWorker((w) => { w1 = w; setTimeout(() => w.onerror({ message: 'boom', preventDefault() {} })); }),
+  })), /import worker failed: boom/);
+  assert.deepEqual(w1.posted, ['a.bin']);
+  assert.ok(w1.terminated);
+  // Fails to load (error event without a message, before any reply).
+  const silent = () => {};
+  silent.onCreate = (w) => w.onerror({});
+  await assert.rejects(within(importFiles(MANIFEST, CANDIDATES, { createWorker: fakeWorker(silent) })), /import worker failed to start/);
 });
 
 test('browser modules import cleanly without a DOM', async () => {

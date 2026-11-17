@@ -1,7 +1,8 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +12,7 @@ process.env.PAG_CACHE = path.join(base, 'cache'); // never the real home or tool
 process.env.PAG_HOME = path.join(base, 'home');
 after(() => rmSync(base, { recursive: true, force: true }));
 
-const { pack, headersFor, run } = await import('../skills/port-any-game/scripts/pack.mjs');
+const { pack, headersFor, run, checkGameNames } = await import('../skills/port-any-game/scripts/pack.mjs');
 const { run: runBuild } = await import('../skills/port-any-game/scripts/build.mjs');
 const { toolDir } = await import('../skills/port-any-game/scripts/setup.mjs');
 const { startServer, parseHeadersFile } = await import('../skills/port-any-game/scripts/serve.mjs');
@@ -35,23 +36,28 @@ const lane = (over = {}) => ({
 const opts = (o = {}) => ({ laneModule: lane(), lock: LOCK, ...o });
 
 let n = 0;
-function makePort({ mode = 'byo', acks = [], redistributable, laneId = 'lane-test' } = {}) {
+// linkGame: game/ is a link to a separate "install" folder, like a real port made by pag new.
+function makePort({ mode = 'byo', acks = [], redistributable, laneId = 'lane-test', linkGame = false } = {}) {
   const dir = path.join(base, `port-${++n}`);
+  const src = linkGame ? path.join(base, `install-${n}`) : path.join(dir, 'game');
   const game = {
     'GAME.EXE': Buffer.concat([Buffer.from('MZ'), randomBytes(4094)]),
     'data/level1.dat': randomBytes(3000),
     'data/Music.ogg': randomBytes(2048),
   };
   for (const [rel, data] of Object.entries(game)) {
-    mkdirSync(path.dirname(path.join(dir, 'game', rel)), { recursive: true });
-    writeFileSync(path.join(dir, 'game', rel), data);
+    mkdirSync(path.dirname(path.join(src, rel)), { recursive: true });
+    writeFileSync(path.join(src, rel), data);
   }
-  writeFileSync(path.join(dir, 'game', 'Thumbs.db'), 'os junk');
+  writeFileSync(path.join(src, 'Thumbs.db'), 'os junk');
+  mkdirSync(dir, { recursive: true });
+  if (linkGame) symlinkSync(src, path.join(dir, 'game'), 'junction');
   const port = { schema: 'port-any-game/port@1', id: `test-game-${n}`, name: 'Test Game', lane: laneId,
     data: { mode, ...(redistributable ? { redistributable: true } : {}) }, tools: {}, acks, created_at: '2026-11-17T00:00:00Z' };
   writeFileSync(path.join(dir, 'port.json'), JSON.stringify(port, null, 2));
-  return { dir, game, port };
+  return { dir, src, game, port };
 }
+const ACK = [{ id: 'ACK_RIGHTS_HOLDER', at: '2026-11-17T00:00:00Z' }];
 
 function* files(dir) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -60,6 +66,7 @@ function* files(dir) {
   }
 }
 const io = () => { const o = { out: '', err: '' }; return { o, io: { out: (t) => (o.out += t), err: (t) => (o.err += t) } }; };
+const runtimeDir = (distDir, shell) => path.dirname(path.join(distDir, ...shell.entry.adapter.split('/')));
 
 test('pack writes shell, manifest, _headers, robots, LICENSES', async () => {
   const { dir, game, port } = makePort();
@@ -77,7 +84,7 @@ test('pack writes shell, manifest, _headers, robots, LICENSES', async () => {
   assert.equal(shell.schema, 1);
   assert.equal(shell.game_id, port.id);
   assert.equal(shell.lane, 'lane-test');
-  assert.deepEqual(shell.entry, { adapter: 'runtime/lane-test/adapter.js' });
+  assert.match(shell.entry.adapter, /^runtime\/lane-test-[0-9a-f]{8}\/adapter\.js$/, 'content-hashed runtime folder (R30)');
   assert.deepEqual(shell.data, { mode: 'byo', manifest: 'game/manifest.json', mount: '/game', saves: `/saves/${port.id}` });
   assert.equal(shell.needs_coi, false);
   assert.deepEqual(shell.verify.inputs, ['ArrowRight']);
@@ -88,10 +95,12 @@ test('pack writes shell, manifest, _headers, robots, LICENSES', async () => {
   assert.deepEqual(shell.lane_config, { exe: 'GAME.EXE' });
   for (const k of ['webgl2', 'webgpu', 'threads', 'simd', 'jspi']) assert.equal(typeof shell.requires[k], 'boolean', k);
 
-  assert.deepEqual(readFileSync(d('runtime/lane-test/adapter.js')), readFileSync(ADAPTER));
-  assert.equal(readFileSync(d('runtime/lane-test/runtime.js'), 'utf8'), 'export const rt = 1;\n');
-  assert.ok(existsSync(d('runtime/lane-test/sub/runtime.wasm')));
-  assert.ok(!existsSync(d('runtime/lane-test/.ok')));
+  const rt = runtimeDir(distDir, shell);
+  assert.deepEqual(readdirSync(d('runtime')), [path.basename(rt)]);
+  assert.deepEqual(readFileSync(path.join(rt, 'adapter.js')), readFileSync(ADAPTER));
+  assert.equal(readFileSync(path.join(rt, 'runtime.js'), 'utf8'), 'export const rt = 1;\n');
+  assert.ok(existsSync(path.join(rt, 'sub', 'runtime.wasm')));
+  assert.ok(!existsSync(path.join(rt, '.ok')));
 
   const m = JSON.parse(readFileSync(d('game/manifest.json'), 'utf8'));
   assert.equal(m.source, 'game');
@@ -105,6 +114,7 @@ test('pack writes shell, manifest, _headers, robots, LICENSES', async () => {
   for (const s of ['fake-rt', '1.2.3', 'License: GPL-2.0', 'Source: https://example.invalid/fake-rt', 'GNU GENERAL PUBLIC LICENSE Version 2 (fake text)']) assert.ok(lic.includes(s), s);
   assert.match(lic, /complete corresponding source.*https:\/\/example\.invalid\/fake-rt.*1\.2\.3/is);
   assert.match(readFileSync(d('LICENSES', 'port-any-game-shell.txt'), 'utf8'), /MIT License[\s\S]*Permission is hereby granted/);
+  assert.deepEqual(readdirSync(path.join(dir, 'work')), [], 'no temp dirs left behind');
 
   const srv = await startServer({ root: distDir, log: () => {} });
   try {
@@ -114,7 +124,23 @@ test('pack writes shell, manifest, _headers, robots, LICENSES', async () => {
     assert.equal(r.headers.get('cache-control'), 'no-cache');
     assert.equal(r.headers.get('cross-origin-embedder-policy'), null);
     assert.equal((await fetch(`${srv.url}/shell/shell.js`)).status, 200);
+    const a = await fetch(`${srv.url}/${shell.entry.adapter}`);
+    assert.equal(a.status, 200, 'entry.adapter resolves');
+    assert.equal(a.headers.get('cache-control'), 'public, max-age=31536000, immutable');
   } finally { await srv.close(); }
+});
+
+test('runtime folder hash changes when the adapter changes (R30)', async () => {
+  const adapter = path.join(base, 'adapter-copy.js');
+  copyFileSync(ADAPTER, adapter);
+  const { dir } = makePort();
+  const a = await pack(dir, opts({ laneModule: lane({ adapter }) }));
+  assert.equal((await pack(dir, opts({ laneModule: lane({ adapter }) }))).shell.entry.adapter, a.shell.entry.adapter, 'deterministic');
+  appendFileSync(adapter, '// changed\n');
+  const b = await pack(dir, opts({ laneModule: lane({ adapter }) }));
+  assert.notEqual(b.shell.entry.adapter, a.shell.entry.adapter);
+  assert.equal(readFileSync(path.join(b.distDir, ...b.shell.entry.adapter.split('/')), 'utf8'), readFileSync(adapter, 'utf8'));
+  assert.ok(!existsSync(path.join(b.distDir, ...a.shell.entry.adapter.split('/'))), 'the old runtime folder went with the old dist');
 });
 
 test('byo pack contains no game bytes', async () => {
@@ -143,7 +169,7 @@ test('bundled-public refused without ACK_RIGHTS_HOLDER', async () => {
   assert.equal(await run([noAck.dir], cli, { lock: LOCK }), 4, 'policy refusal exits 4 before the lane is looked up');
   assert.match(o.err, /bundled-public|ACK_RIGHTS_HOLDER/);
 
-  const acked = makePort({ mode: 'bundled-public', acks: [{ id: 'ACK_RIGHTS_HOLDER', at: '2026-11-17T00:00:00Z' }] });
+  const acked = makePort({ mode: 'bundled-public', acks: ACK });
   const r1 = await pack(acked.dir, opts());
   assert.equal(r1.shell.data.mode, 'bundled-public');
   assert.deepEqual(readFileSync(path.join(r1.distDir, 'game', 'GAME.EXE')), acked.game['GAME.EXE']);
@@ -152,7 +178,22 @@ test('bundled-public refused without ACK_RIGHTS_HOLDER', async () => {
   assert.equal((await pack(redist.dir, opts())).shell.data.mode, 'bundled-public');
 });
 
-test('pack CLI: data mode outside the lane, missing adapter, missing runtime tool', async () => {
+test('bundled-public is lane-independent; byo and bundled must be in dataModes (R29)', async () => {
+  const byoOnly = lane({ dataModes: ['byo'] });
+  const acked = makePort({ mode: 'bundled-public', acks: ACK });
+  const r = await pack(acked.dir, opts({ laneModule: byoOnly }));
+  assert.equal(r.shell.data.mode, 'bundled-public');
+  assert.deepEqual(readFileSync(path.join(r.distDir, 'game', 'data', 'level1.dat')), acked.game['data/level1.dat'], 'game bytes present');
+
+  const c = io();
+  assert.equal(await run([acked.dir, '--mode', 'bundled'], c.io, { lock: LOCK, laneModule: byoOnly }), 2);
+  assert.match(c.o.err, /lane-test supports data modes byo; not 'bundled'/);
+
+  const noAck = makePort({ mode: 'bundled-public' });
+  await assert.rejects(pack(noAck.dir, opts({ laneModule: byoOnly })), (e) => e.code === 'PUBLIC_BUNDLED');
+});
+
+test('pack CLI: data mode outside the lane, missing adapter, missing runtime tool, missing game folder', async () => {
   const ruffle = makePort({ laneId: 'rt-ruffle' });
   let c = io();
   assert.equal(await run([ruffle.dir, '--mode', 'bundled'], c.io), 2);
@@ -172,6 +213,13 @@ test('pack CLI: data mode outside the lane, missing adapter, missing runtime too
   c = io();
   assert.equal(await run([p.dir], c.io, { lock: missingTool, laneModule: lane() }), 1);
   assert.match(c.o.err, /pag setup/);
+
+  const noGame = makePort();
+  rmSync(path.join(noGame.dir, 'game'), { recursive: true });
+  c = io();
+  assert.equal(await run([noGame.dir], c.io, opts()), 1);
+  assert.match(c.o.err, /game\/ folder is missing/);
+  assert.ok(!existsSync(path.join(noGame.dir, 'dist')));
 
   c = io();
   assert.equal(await run([path.join(base, 'not-a-port')], c.io), 2);
@@ -201,6 +249,17 @@ test('headersFor adds COOP/COEP only when needs_coi', () => {
   assert.equal(headersFor({ requires: { threads: true } }), plain, 'only needs_coi decides');
 });
 
+test('X-Robots-Tag is for private builds only (none on bundled-public)', async () => {
+  for (const mode of ['byo', 'bundled']) assert.match(headersFor({ needs_coi: false, data: { mode } }), /X-Robots-Tag: noindex, nofollow/, mode);
+  const pub = headersFor({ needs_coi: false, data: { mode: 'bundled-public' } });
+  assert.doesNotMatch(pub, /X-Robots-Tag/);
+  assert.match(pub, /Content-Security-Policy/);
+  const acked = makePort({ mode: 'bundled-public', acks: ACK });
+  const { distDir } = await pack(acked.dir, opts());
+  assert.doesNotMatch(readFileSync(path.join(distDir, '_headers'), 'utf8'), /X-Robots-Tag/);
+  assert.equal(readFileSync(path.join(distDir, 'robots.txt'), 'utf8'), 'User-agent: *\nDisallow: /\n');
+});
+
 test('manifest version changes when a file changes', async () => {
   const { dir } = makePort();
   const v = async () => JSON.parse(readFileSync(path.join((await pack(dir, opts())).distDir, 'game', 'manifest.json'), 'utf8'));
@@ -211,6 +270,74 @@ test('manifest version changes when a file changes', async () => {
   const c = await v();
   assert.notEqual(c.version, a.version);
   assert.equal(c.files.find((e) => e.path === 'data/level1.dat').sha256, sha(b));
+});
+
+test('a failed pack leaves the previous dist whole and no temp dirs', async () => {
+  const { dir } = makePort();
+  await pack(dir, opts());
+  const before = readFileSync(path.join(dir, 'dist', 'shell.json'), 'utf8');
+  const broken = lane({ shell: () => { throw new Error('lane shell broke'); } });
+  await assert.rejects(pack(dir, opts({ laneModule: broken, mode: 'bundled' })), /lane shell broke/);
+  assert.equal(readFileSync(path.join(dir, 'dist', 'shell.json'), 'utf8'), before);
+  assert.deepEqual(readdirSync(path.join(dir, 'dist', 'game')), ['manifest.json'], 'no bundled bytes leaked into the kept dist');
+  assert.deepEqual(readdirSync(path.join(dir, 'work')), []);
+});
+
+test('a game manifest.json clashes in any letter case', async () => {
+  const p = makePort();
+  writeFileSync(path.join(p.dir, 'game', 'MANIFEST.JSON'), '{"name":"pwa"}');
+  await assert.rejects(pack(p.dir, opts({ mode: 'bundled' })), /MANIFEST\.JSON .*clash with game\/manifest\.json/);
+  const m = JSON.parse(readFileSync(path.join((await pack(p.dir, opts())).distDir, 'game', 'manifest.json'), 'utf8'));
+  assert.ok(m.files.some((f) => f.path === 'MANIFEST.JSON'), 'byo copies no game files, so no clash');
+});
+
+test('checkGameNames refuses names the browser cannot use', () => {
+  checkGameNames(['GAME.EXE', 'data/a.bin', 'Data2/a.bin']);
+  assert.throws(() => checkGameNames(['dir\\file.dat']), /cannot be used in a browser/);
+  assert.throws(() => checkGameNames(['a/./b']), /cannot be used in a browser/);
+  assert.throws(() => checkGameNames(['data/Level1.dat', 'data/level1.DAT']), /differ only by case/);
+});
+
+test('case-only twins on disk are refused (case-sensitive file systems)', async (t) => {
+  const p = makePort();
+  writeFileSync(path.join(p.dir, 'game', 'Twin.dat'), 'a');
+  writeFileSync(path.join(p.dir, 'game', 'twin.dat'), 'b');
+  if (!readdirSync(path.join(p.dir, 'game')).includes('Twin.dat') || !readdirSync(path.join(p.dir, 'game')).includes('twin.dat')) return t.skip('case-insensitive file system');
+  await assert.rejects(pack(p.dir, opts()), /differ only by case/);
+});
+
+test('links must stay inside the game folder; other non-regular entries are skipped', async (t) => {
+  const outside = path.join(base, 'outside');
+  mkdirSync(outside, { recursive: true });
+  writeFileSync(path.join(outside, 'id_rsa'), 'PRIVATE KEY');
+
+  let real;
+  try { real = makePort({ linkGame: true }); } catch (e) { return t.skip(`cannot create links here (${e.code})`); }
+  // A folder link out (a junction needs no admin rights on Windows) is refused before anything is written.
+  symlinkSync(outside, path.join(real.src, 'escape'), 'junction');
+  await assert.rejects(pack(real.dir, opts({ mode: 'bundled' })), /escape links outside the game folder/);
+  assert.ok(!existsSync(path.join(real.dir, 'dist')));
+
+  // A folder link that stays inside (game/ itself is a link, as pag new makes it) is skipped with a warning.
+  const ok = makePort({ linkGame: true });
+  symlinkSync(path.join(ok.src, 'data'), path.join(ok.src, 'alias'), 'junction');
+  const warns = [];
+  const r = await pack(ok.dir, opts({ mode: 'bundled', warn: (m) => warns.push(m) }));
+  assert.match(warns.join('\n'), /alias: linked folder inside the game folder, not followed/);
+  const m = JSON.parse(readFileSync(path.join(r.distDir, 'game', 'manifest.json'), 'utf8'));
+  assert.deepEqual(m.files.map((f) => f.path), ['GAME.EXE', 'data/Music.ogg', 'data/level1.dat']);
+
+  if (process.platform !== 'win32' && spawnSync('mkfifo', [path.join(ok.src, 'pipe')]).status === 0) {
+    const w = [];
+    await pack(ok.dir, opts({ mode: 'bundled', warn: (x) => w.push(x) }));
+    assert.match(w.join('\n'), /pipe: not a regular file, skipped/);
+  } else t.diagnostic('FIFO case skipped (no mkfifo)');
+
+  const fileLink = makePort();
+  try { symlinkSync(path.join(outside, 'id_rsa'), path.join(fileLink.dir, 'game', 'key.dat'), 'file'); }
+  catch (e) { return t.diagnostic(`file-symlink case skipped (${e.code}: file symlinks need admin rights on Windows)`); }
+  await assert.rejects(pack(fileLink.dir, opts({ mode: 'bundled' })), /key\.dat links outside the game folder/);
+  assert.ok(!existsSync(path.join(fileLink.dir, 'dist')));
 });
 
 test('pack prefers build/game, copies only listed runtime files, needs_coi follows threads', async () => {
@@ -224,8 +351,8 @@ test('pack prefers build/game, copies only listed runtime files, needs_coi follo
   assert.deepEqual(m.files.map((e) => e.path), ['index.html']);
   assert.equal(readFileSync(path.join(distDir, 'game', 'index.html'), 'utf8'), '<p>built</p>');
   assert.ok(!existsSync(path.join(distDir, 'game', 'GAME.EXE')));
-  assert.ok(existsSync(path.join(distDir, 'runtime', 'lane-test', 'runtime.js')));
-  assert.ok(!existsSync(path.join(distDir, 'runtime', 'lane-test', 'sub')));
+  const rt = runtimeDir(distDir, shell);
+  assert.deepEqual(readdirSync(rt).sort(), ['adapter.js', 'runtime.js']);
   assert.equal(shell.needs_coi, true);
   assert.match(readFileSync(path.join(distDir, '_headers'), 'utf8'), /Cross-Origin-Embedder-Policy: require-corp/);
   assert.ok(statSync(path.join(distDir, 'LICENSES', 'fake-rt.txt')).size > 0);
@@ -242,4 +369,5 @@ test('pag build dispatches to the lane build or explains it has none', async () 
   assert.deepEqual(calls, [path.resolve(p.dir)]);
   c = io();
   assert.equal(await runBuild([path.join(base, 'not-a-port')], c.io), 2);
+  assert.match(c.o.err, /not a port folder/);
 });

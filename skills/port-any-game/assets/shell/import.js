@@ -1,20 +1,18 @@
 // BYO import: the user's own game folder -> OPFS /game/. Files are identified against manifest.files by relative
-// path + size, then hashed (same rule as the manifest) and copied one at a time in a Worker: <name>.part, verify,
-// rename, then a <name>.done marker holding the sha256, so an interrupted import resumes per file.
+// path + size, then hashed (same rule as the manifest) and copied one at a time in a Worker: a .part file, verify,
+// move into /game/, then a .done marker holding the sha256, so an interrupted import resumes per file. The .part
+// and .done files live in their own OPFS tree (importLayout), never beside game files.
 // This module is also that Worker (it detects WorkerGlobalScope). No DOM at module top level.
-import { fileHasher, matchManifest, normalizePath } from './pure.js';
+import { fileHasher, importLayout, matchManifest, normalizePath } from './pure.js';
 import { dirAt } from './storage.js';
 
-const GAME = 'game';
 const PROGRESS_STEP = 8 * 1024 * 1024;
 
-const split = (p) => { const segs = p.split('/'); const name = segs.pop(); return [segs, name]; };
-
 async function isDone(e) {
-  const [segs, name] = split(e.path);
+  const L = importLayout(e.path);
   try {
-    const dir = await dirAt([GAME, ...segs]);
-    return (await (await (await dir.getFileHandle(`${name}.done`)).getFile()).text()) === e.sha256;
+    const dir = await dirAt(L.stateDir);
+    return (await (await (await dir.getFileHandle(L.done)).getFile()).text()) === e.sha256;
   } catch { return false; }
 }
 
@@ -29,8 +27,8 @@ export async function missingFiles(manifest) {
 export async function opfsFiles(manifest) {
   const map = new Map();
   for (const e of manifest.files) {
-    const [segs, name] = split(e.path);
-    map.set(e.path, await (await (await dirAt([GAME, ...segs])).getFileHandle(name)).getFile());
+    const L = importLayout(e.path);
+    map.set(e.path, await (await (await dirAt(L.gameDir)).getFileHandle(L.name)).getFile());
   }
   return map;
 }
@@ -79,32 +77,48 @@ export async function fromFixture(url) {
   return out;
 }
 
-// Copies matched files that are not done yet. Resolves {missing, failed, copied, skipped}.
+const newWorker = () => new Worker(new URL('./import.js', import.meta.url), { type: 'module' });
+
+// Copies matched files that are not done yet. Resolves {missing, failed, copied, skipped}. Rejects when the Worker
+// itself fails (could not load, or crashed), so the shell shows an error instead of waiting forever.
 // interruptAfter (test hook): reload after that many copies, only on a run that started with nothing done.
-export async function importFiles(manifest, candidates, { onProgress = () => {}, interruptAfter = 0 } = {}) {
+export async function importFiles(manifest, candidates, { onProgress = () => {}, interruptAfter = 0, createWorker = newWorker } = {}) {
   const { matched, missing } = matchManifest(manifest.files, candidates);
   const todo = [];
   let skipped = 0;
   for (const m of matched) if (await isDone(m.entry)) skipped++; else todo.push(m);
-  const total = todo.reduce((s, m) => s + m.entry.size, 0);
   const failed = [];
   let copied = 0;
+  if (!todo.length) return { missing, failed, copied, skipped };
+  const total = todo.reduce((s, m) => s + m.entry.size, 0);
   let doneBytes = 0;
-  const worker = new Worker(new URL('./import.js', import.meta.url), { type: 'module' });
+  let current = null;
+  let fatal = null;
+  const worker = createWorker();
+  worker.onmessage = ({ data }) => {
+    if (data.progress !== undefined) onProgress(doneBytes + data.progress, total);
+    else if (data.ok) current?.resolve();
+    else current?.reject(new Error(data.error));
+  };
+  worker.onerror = (e) => {
+    e?.preventDefault?.();
+    fatal = new Error(`the import worker failed${e?.message ? `: ${e.message}` : ' to start'}`);
+    current?.reject(fatal);
+  };
+  const copyOne = (msg) => new Promise((resolve, reject) => {
+    if (fatal) return reject(fatal);
+    current = { resolve, reject };
+    worker.postMessage(msg);
+  });
   try {
     for (const { entry, candidate } of todo) {
       try {
-        await new Promise((resolve, reject) => {
-          worker.onmessage = ({ data }) => {
-            if (data.progress !== undefined) onProgress(doneBytes + data.progress, total);
-            else if (data.ok) resolve();
-            else reject(new Error(data.error));
-          };
-          worker.onerror = (e) => reject(new Error(e.message || 'import worker failed'));
-          worker.postMessage({ path: entry.path, size: entry.size, sha256: entry.sha256, src: candidate.file ?? candidate.url });
-        });
+        await copyOne({ path: entry.path, size: entry.size, sha256: entry.sha256, src: candidate.file ?? candidate.url });
         copied++;
-      } catch (e) { failed.push({ path: entry.path, error: e.message }); }
+      } catch (e) {
+        if (fatal) throw fatal;
+        failed.push({ path: entry.path, error: e.message });
+      }
       doneBytes += entry.size;
       onProgress(doneBytes, total);
       if (interruptAfter && copied === interruptAfter && skipped === 0) {
@@ -129,10 +143,10 @@ async function writeAll(dir, name, blob) {
 }
 
 async function copy({ path, size, sha256, src }) {
-  const [segs, name] = split(path);
-  const dir = await dirAt([GAME, ...segs], true);
-  await dir.removeEntry(`${name}.done`).catch(() => {});
-  const part = await dir.getFileHandle(`${name}.part`, { create: true });
+  const L = importLayout(path);
+  const state = await dirAt(L.stateDir, true);
+  await state.removeEntry(L.done).catch(() => {});
+  const part = await state.getFileHandle(L.part, { create: true });
   const hasher = fileHasher(size);
   const out = await part.createSyncAccessHandle();
   let at = 0;
@@ -155,13 +169,14 @@ async function copy({ path, size, sha256, src }) {
   } finally { out.close(); }
   const got = hasher.digest().sha256;
   if (at !== size || got !== sha256) {
-    await dir.removeEntry(`${name}.part`);
+    await state.removeEntry(L.part);
     throw new Error(`${at !== size ? `size ${at}, expected ${size}` : 'content differs'}: a different version of the game?`);
   }
-  await dir.removeEntry(name).catch(() => {});
-  if (typeof part.move === 'function') await part.move(name);
-  else { await writeAll(dir, name, await part.getFile()); await dir.removeEntry(`${name}.part`); }
-  await writeAll(dir, `${name}.done`, new Blob([sha256]));
+  const game = await dirAt(L.gameDir, true);
+  await game.removeEntry(L.name).catch(() => {});
+  try { await part.move(game, L.name); } // not every engine moves between OPFS folders: copy, then delete
+  catch { await writeAll(game, L.name, await part.getFile()); await state.removeEntry(L.part); }
+  await writeAll(state, L.done, new Blob([sha256]));
 }
 
 if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope) {

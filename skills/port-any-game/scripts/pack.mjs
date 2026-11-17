@@ -1,8 +1,8 @@
 // `pag pack [portDir] [--mode byo|bundled|bundled-public]`: assemble <port>/dist (spec §8): the shared shell,
-// runtime/<lane>/ (adapter + pinned runtime files), shell.json, game/manifest.json (+ the game files unless byo),
-// _headers, robots.txt and LICENSES/. Exit 0 ok, 1 failure, 2 usage, 4 policy refusal.
+// runtime/<lane>-<hash8>/ (adapter + pinned runtime files), shell.json, game/manifest.json (+ the game files unless
+// byo), _headers, robots.txt and LICENSES/. Exit 0 ok, 1 failure, 2 usage, 4 policy refusal.
 import { createHash } from 'node:crypto';
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -10,6 +10,7 @@ import { sha256File, walk } from './lib/fsx.mjs';
 import { loadLock, resolveName, toolDir } from './setup.mjs';
 import { isPublicAllowed, PolicyError } from './policy.mjs';
 import { LANES } from './lanes/index.mjs';
+import { normalizePath } from '../assets/shell/pure.js';
 
 const ASSETS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'assets');
 const SHELL_DIR = path.join(ASSETS, 'shell');
@@ -54,9 +55,19 @@ const DEFAULTS = {
 class UsageError extends Error {}
 
 const isDir = (p) => statSync(p, { throwIfNoEntry: false })?.isDirectory() === true;
+const exists = (p) => !!lstatSync(p, { throwIfNoEntry: false });
+const inside = (root, p) => { const r = path.relative(root, p); return r === '' || (!r.startsWith('..') && !path.isAbsolute(r)); };
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
+const rmrf = (p) => rmSync(p, { recursive: true, force: true, maxRetries: 2 });
+
+// One port.json reader for pack and build. Throws UsageError when the folder is not a port.
+export function readPort(dir) {
+  try { return JSON.parse(readFileSync(path.join(dir, 'port.json'), 'utf8').replace(/^\uFEFF/, '')); }
+  catch (e) { throw new UsageError(`${dir} is not a port folder (no readable port.json: ${e.code ?? e.message})`); }
+}
 
 // The spec §8 / note 05 §9a block. COOP + COEP only when needs_coi; never credentialless.
+// X-Robots-Tag is for private builds, so a bundled-public build leaves it out (spec §8).
 export function headersFor(shell) {
   return [
     '/*',
@@ -65,7 +76,7 @@ export function headersFor(shell) {
     `  Content-Security-Policy: ${CSP}`,
     '  X-Content-Type-Options: nosniff',
     '  Referrer-Policy: no-referrer',
-    '  X-Robots-Tag: noindex, nofollow',
+    ...(shell.data?.mode === 'bundled-public' ? [] : ['  X-Robots-Tag: noindex, nofollow']),
     ...['/index.html', '/shell.json', '/game/manifest.json'].flatMap((p) => [p, '  Cache-Control: no-cache']),
     '/runtime/*',
     '  Cache-Control: public, max-age=31536000, immutable',
@@ -73,14 +84,14 @@ export function headersFor(shell) {
   ].join('\n');
 }
 
-function shellJson(port, lane, mode) {
+function shellJson(port, lane, mode, runtimeDir) {
   const c = lane.shell?.(port) ?? {};
   const merged = (k) => ({ ...DEFAULTS[k], ...c[k] });
   return {
     schema: 1,
     game_id: port.id,
     lane: lane.id,
-    entry: { adapter: `runtime/${lane.id}/adapter.js` },
+    entry: { adapter: `runtime/${runtimeDir}/adapter.js` },
     requires: merged('requires'),
     needs_coi: c.needs_coi ?? c.requires?.threads === true,
     memory: merged('memory'),
@@ -93,22 +104,60 @@ function shellJson(port, lane, mode) {
   };
 }
 
-// Entries hash exactly like the survey (fsx.sha256File: files over 256 MiB as first + last 1 MiB, partial: true).
-async function gameFiles(src) {
-  const files = [];
+// Manifest names must reach the browser unchanged (the shell's own normalizePath) and stay unique ignoring case
+// (Windows copies and the import's case fallback cannot tell such twins apart).
+export function checkGameNames(paths) {
+  const folded = new Map();
+  for (const p of paths) {
+    if (normalizePath(p) !== p) throw new Error(`game file name ${JSON.stringify(p)} cannot be used in a browser (backslash or dot segment); rename it`);
+    const twin = folded.get(p.toLowerCase());
+    if (twin) throw new Error(`game files ${twin} and ${p} differ only by case; browsers and Windows copies cannot tell them apart`);
+    folded.set(p.toLowerCase(), p);
+  }
+}
+
+// Regular files only, hashed exactly like the survey (fsx.sha256File: over 256 MiB = first + last 1 MiB, partial).
+// A link must resolve inside the game folder: a link out could put any file on this machine into a bundled dist.
+async function gameFiles(src, warn) {
+  const root = realpathSync(src); // game/ itself is a link to the user's install
+  const found = [];
   for await (const e of walk(src)) {
     if (e.truncated) throw new Error('too many game files');
     if (JUNK.test(path.basename(e.rel))) continue;
-    let { size } = e;
+    let abs = e.abs;
     if (e.isSymlink) {
-      const st = statSync(e.abs, { throwIfNoEntry: false });
-      if (!st?.isFile()) continue; // ponytail: symlinked folders inside the game are not followed
-      size = st.size;
+      try { abs = realpathSync(e.abs); } catch { warn(`${e.rel}: broken link, skipped`); continue; }
+      if (!inside(root, abs)) throw new Error(`game file ${e.rel} links outside the game folder; refusing to pack it (put the real file there instead)`);
     } else if (e.error) throw new Error(`cannot read game file ${e.rel || '.'}: ${e.error}`);
-    const h = await sha256File(e.abs, size);
-    files.push({ path: e.rel.normalize('NFC'), size, sha256: h.sha256, ...(h.partial ? { partial: true } : {}), abs: e.abs });
+    const st = statSync(abs);
+    if (st.isDirectory()) { warn(`${e.rel}: linked folder inside the game folder, not followed`); continue; }
+    if (!st.isFile()) { warn(`${e.rel}: not a regular file, skipped`); continue; }
+    found.push({ path: e.rel.normalize('NFC'), size: st.size, abs });
   }
-  return files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  found.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  checkGameNames(found.map((f) => f.path));
+  const files = [];
+  for (const f of found) {
+    const h = await sha256File(f.abs, f.size);
+    files.push({ path: f.path, size: f.size, sha256: h.sha256, ...(h.partial ? { partial: true } : {}), abs: f.abs });
+  }
+  return files;
+}
+
+// Adapter + pinned tool files, named by a hash of their paths and bytes (R30): /runtime/* is served immutable.
+async function runtimeFiles(lane, adapter, tool) {
+  const files = new Map(); // rel -> abs
+  if (tool && lane.runtime.files) for (const f of lane.runtime.files) files.set(f, path.join(tool.dir, ...f.split('/')));
+  else if (tool) {
+    for await (const e of walk(tool.dir)) {
+      if (e.error) throw new Error(`cannot read runtime file ${e.rel}: ${e.error}`);
+      if (e.rel !== '.ok' && !e.truncated) files.set(e.rel, e.abs);
+    }
+  }
+  files.set('adapter.js', adapter);
+  const h = createHash('sha256');
+  for (const rel of [...files.keys()].sort()) h.update(`${rel}\0`).update(readFileSync(files.get(rel))).update('\0');
+  return { files, dir: `${lane.id}-${h.digest('hex').slice(0, 8)}` };
 }
 
 function licenseText(e, dir) {
@@ -119,13 +168,36 @@ function licenseText(e, dir) {
   return `${lines.join('\n')}\n`;
 }
 
-function readPort(dir) {
-  try { return JSON.parse(readFileSync(path.join(dir, 'port.json'), 'utf8').replace(/^﻿/, '')); }
-  catch (e) { throw new UsageError(`${dir} is not a port folder (no readable port.json: ${e.code ?? e.message})`); }
+const copyTo = (from, to) => { mkdirSync(path.dirname(to), { recursive: true }); copyFileSync(from, to); };
+
+function writeDist(out, { port, lane, mode, tool, runtime, files, source }) {
+  mkdirSync(path.join(out, 'shell'), { recursive: true });
+  for (const f of readdirSync(SHELL_DIR)) copyFileSync(path.join(SHELL_DIR, f), f === 'index.html' ? path.join(out, f) : path.join(out, 'shell', f));
+  for (const [rel, abs] of runtime.files) copyTo(abs, path.join(out, 'runtime', runtime.dir, ...rel.split('/')));
+  mkdirSync(path.join(out, 'LICENSES'));
+  writeFileSync(path.join(out, 'LICENSES', 'port-any-game-shell.txt'), SHELL_LICENSE);
+  if (tool) writeFileSync(path.join(out, 'LICENSES', `${tool.entry.name}.txt`), licenseText(tool.entry, tool.dir));
+
+  const entries = files.map(({ abs, ...f }) => f);
+  const manifest = {
+    version: sha256(entries.map((f) => `${f.path}\0${f.size}\0${f.sha256}`).join('\n')),
+    source,
+    total_bytes: entries.reduce((s, f) => s + f.size, 0),
+    files: entries,
+  };
+  mkdirSync(path.join(out, 'game'));
+  if (mode !== 'byo') for (const f of files) copyTo(f.abs, path.join(out, 'game', ...f.path.split('/')));
+  writeFileSync(path.join(out, 'game', 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const shell = shellJson(port, lane, mode, runtime.dir);
+  writeFileSync(path.join(out, 'shell.json'), `${JSON.stringify(shell, null, 2)}\n`);
+  writeFileSync(path.join(out, '_headers'), headersFor(shell));
+  writeFileSync(path.join(out, 'robots.txt'), 'User-agent: *\nDisallow: /\n');
+  return shell;
 }
 
 // opts.laneModule overrides LANES[port.lane] (tests and verify use the lane-test fixture); opts.lock overrides loadLock().
-export async function pack(portDir, { mode, laneModule, lock } = {}) {
+export async function pack(portDir, { mode, laneModule, lock, warn = () => {} } = {}) {
   const dir = path.resolve(portDir);
   const port = readPort(dir);
   mode ??= port.data?.mode ?? 'byo';
@@ -135,6 +207,7 @@ export async function pack(portDir, { mode, laneModule, lock } = {}) {
   }
   const lane = laneModule ?? LANES[port.lane];
   if (!lane) throw new UsageError(`unknown lane '${port.lane}' in port.json`);
+  // R29: bundled-public is lane-independent (gated only by isPublicAllowed above); byo/bundled must be in dataModes.
   if (mode !== 'bundled-public' && !lane.dataModes?.includes(mode)) throw new UsageError(`lane ${lane.id} supports data modes ${lane.dataModes?.join(', ')}; not '${mode}'`);
 
   const adapter = lane.adapter ?? path.join(ASSETS, 'lanes', lane.id, 'adapter.js');
@@ -147,54 +220,32 @@ export async function pack(portDir, { mode, laneModule, lock } = {}) {
     tool = { entry: lk[name], dir: toolDir(lk[name]) };
     if (!existsSync(path.join(tool.dir, '.ok'))) throw new Error(`${name} ${tool.entry.version} is not installed; run \`pag setup ${lane.runtime.tool} --yes\` first`);
   }
+  const runtime = await runtimeFiles(lane, adapter, tool);
   const source = isDir(path.join(dir, 'build', 'game')) ? 'build/game' : 'game';
-  if (!isDir(path.join(dir, source))) throw new Error('no game files: game/ is missing (pag new links it to your install)');
-  const files = await gameFiles(path.join(dir, ...source.split('/')));
-  if (mode !== 'byo' && files.some((f) => f.path === 'manifest.json')) throw new Error(`the game has its own manifest.json at the top of ${source}/, which would clash with game/manifest.json`);
+  if (!isDir(path.join(dir, source))) throw new Error('no game files: the game/ folder is missing (pag new links it to your install)');
+  const files = await gameFiles(path.join(dir, ...source.split('/')), warn);
+  const clash = mode !== 'byo' && files.find((f) => f.path.toLowerCase() === 'manifest.json');
+  if (clash) throw new Error(`the game has its own ${clash.path} at the top of ${source}/, which would clash with game/manifest.json`);
 
-  // Everything that can refuse or fail is checked above; only now replace dist (a byo pack must never keep game bytes).
+  // Build beside dist (under the git-ignored work/), then swap it in, so a failure leaves the previous dist whole
+  // and a byo pack never keeps game bytes from an earlier bundled one.
+  mkdirSync(path.join(dir, 'work'), { recursive: true });
   const dist = path.join(dir, 'dist');
-  rmSync(dist, { recursive: true, force: true });
-  mkdirSync(path.join(dist, 'shell'), { recursive: true });
-  for (const f of readdirSync(SHELL_DIR)) copyFileSync(path.join(SHELL_DIR, f), f === 'index.html' ? path.join(dist, f) : path.join(dist, 'shell', f));
-
-  const rt = path.join(dist, 'runtime', lane.id);
-  mkdirSync(path.join(dist, 'LICENSES'), { recursive: true });
-  writeFileSync(path.join(dist, 'LICENSES', 'port-any-game-shell.txt'), SHELL_LICENSE);
-  if (tool) {
-    if (lane.runtime.files) {
-      for (const f of lane.runtime.files) {
-        const to = path.join(rt, ...f.split('/'));
-        mkdirSync(path.dirname(to), { recursive: true });
-        copyFileSync(path.join(tool.dir, ...f.split('/')), to);
-      }
-    } else cpSync(tool.dir, rt, { recursive: true, filter: (s) => path.basename(s) !== '.ok' });
-    writeFileSync(path.join(dist, 'LICENSES', `${tool.entry.name}.txt`), licenseText(tool.entry, tool.dir));
+  const tmp = path.join(dir, 'work', `pack-tmp-${process.pid}`);
+  const old = path.join(dir, 'work', `pack-old-${process.pid}`);
+  rmrf(tmp);
+  rmrf(old);
+  let shell;
+  try {
+    shell = writeDist(tmp, { port, lane, mode, tool, runtime, files, source });
+    if (exists(dist)) renameSync(dist, old);
+    renameSync(tmp, dist);
+  } catch (e) {
+    if (!exists(dist) && exists(old)) renameSync(old, dist);
+    rmrf(tmp);
+    throw e;
   }
-  mkdirSync(rt, { recursive: true });
-  copyFileSync(adapter, path.join(rt, 'adapter.js'));
-
-  const entries = files.map(({ abs, ...f }) => f);
-  const manifest = {
-    version: sha256(entries.map((f) => `${f.path}\0${f.size}\0${f.sha256}`).join('\n')),
-    source,
-    total_bytes: entries.reduce((s, f) => s + f.size, 0),
-    files: entries,
-  };
-  mkdirSync(path.join(dist, 'game'));
-  if (mode !== 'byo') {
-    for (const f of files) {
-      const to = path.join(dist, 'game', ...f.path.split('/'));
-      mkdirSync(path.dirname(to), { recursive: true });
-      copyFileSync(f.abs, to);
-    }
-  }
-  writeFileSync(path.join(dist, 'game', 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-
-  const shell = shellJson(port, lane, mode);
-  writeFileSync(path.join(dist, 'shell.json'), `${JSON.stringify(shell, null, 2)}\n`);
-  writeFileSync(path.join(dist, '_headers'), headersFor(shell));
-  writeFileSync(path.join(dist, 'robots.txt'), 'User-agent: *\nDisallow: /\n');
+  try { rmrf(old); } catch (e) { warn(`could not remove the previous dist at ${old}: ${e.message}`); }
   return { distDir: dist, shell };
 }
 
@@ -206,7 +257,7 @@ export async function run(argv, io = { out: (t) => process.stdout.write(t), err:
     if (args.positionals.length > 1) throw new Error('too many arguments');
   } catch (e) { io.err(`pag pack: ${e.message}\n${USAGE}`); return 2; }
   try {
-    const { distDir, shell } = await pack(args.positionals[0] ?? '.', { ...opts, mode: args.values.mode });
+    const { distDir, shell } = await pack(args.positionals[0] ?? '.', { ...opts, mode: args.values.mode, warn: (m) => io.err(`pag pack: warning: ${m}\n`) });
     io.out(`Packed ${distDir} (lane ${shell.lane}, data ${shell.data.mode}).\nNext: pag serve ${distDir}, then pag verify.\n`);
     return 0;
   } catch (e) {
