@@ -173,3 +173,22 @@ test('apis by import and delay, versioned DLL names, import wins over delay', ()
   assert.deepEqual(ids(a.input), ['dinput8']);
   assert.deepEqual(ids(a.video), ['bink']);
 });
+
+test('generic-name markers alone are WARN, not STOP', async () => {
+  for (const [file, id] of [['appxmanifest.xml', 'msix-package'], ['sub/AppxManifest.xml', 'msix-package'],
+    ['00000001.tmp', 'safedisc-marker'], ['__Installer/installerdata.xml', 'ea-origin-installer'], ['protect.x86', 'starforce-marker']]) {
+    const p = await prot({ [file]: '' });
+    assert.deepEqual(p.map((x) => [x.id, x.severity]), [[id, 'WARN']], file);
+  }
+});
+
+test('MicrosoftGame.config is STOP', async () => {
+  const p = await prot({ 'MicrosoftGame.config': '' });
+  assert.deepEqual(p.map((x) => [x.id, x.class, x.severity]), [['ms-store-gdk', 'LAUNCHER', 'STOP']]);
+});
+
+test('distinctive SafeDisc / StarForce / EA Origin evidence stays STOP', async () => {
+  assert.equal((await prot({ 'secdrv.sys': '' })).find((x) => x.id === 'safedisc').severity, 'STOP');
+  assert.equal((await prot({ 'sfdrv01.sys': '' })).find((x) => x.id === 'starforce').severity, 'STOP');
+  assert.equal((await prot({ 'Core/Activation64.dll': '' })).find((x) => x.id === 'ea-origin').severity, 'STOP');
+});

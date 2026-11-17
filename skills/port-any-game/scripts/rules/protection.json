@@ -35,8 +35,7 @@
   "files": [
    "(^|/)(clcd16|clcd32|dplayerx|drvmgt)\\.dll$",
    "(^|/)(cloksplash|clokspl)\\.exe$",
-   "(^|/)secdrv\\.sys$",
-   "(^|/)00000001\\.tmp$"
+   "(^|/)secdrv\\.sys$"
   ],
   "source": "bos"
  },
@@ -50,7 +49,6 @@
    ".brick"
   ],
   "files": [
-   "(^|/)protect\\.(x86|x64|exe)$",
    "(^|/)(sfdrvrem\\.exe|sfdrv01\\.sys|sfhlp02\\.sys)$"
   ],
   "source": "bos"
@@ -182,19 +180,54 @@
   "class": "LAUNCHER",
   "severity": "STOP",
   "files": [
-   "(^|/)__Installer/installerdata\\.xml$",
    "(^|/)Core/Activation(64)?\\.dll$"
   ],
   "source": "bos"
  },
  {
-  "id": "ms-store",
+  "id": "ms-store-gdk",
   "class": "LAUNCHER",
   "severity": "STOP",
   "files": [
-   "(^|/)(MicrosoftGame\\.config|appxmanifest\\.xml)$"
+   "(^|/)MicrosoftGame\\.config$"
   ],
   "source": "local"
+ },
+ {
+  "id": "msix-package",
+  "class": "LAUNCHER",
+  "severity": "WARN",
+  "files": [
+   "(^|/)appxmanifest\\.xml$"
+  ],
+  "source": "local"
+ },
+ {
+  "id": "safedisc-marker",
+  "class": "DRM",
+  "severity": "WARN",
+  "files": [
+   "(^|/)00000001\\.tmp$"
+  ],
+  "source": "bos"
+ },
+ {
+  "id": "starforce-marker",
+  "class": "DRM",
+  "severity": "WARN",
+  "files": [
+   "(^|/)protect\\.(x86|x64|exe)$"
+  ],
+  "source": "bos"
+ },
+ {
+  "id": "ea-origin-installer",
+  "class": "LAUNCHER",
+  "severity": "WARN",
+  "files": [
+   "(^|/)__Installer/installerdata\\.xml$"
+  ],
+  "source": "bos"
  },
  {
   "id": "pirated-steam-emu",
