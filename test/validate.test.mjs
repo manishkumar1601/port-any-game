@@ -35,7 +35,7 @@ test('accepts the real repo', () => {
 });
 
 test('rejects extra frontmatter key', () => {
-  const errs = check(({ edit }) => edit(SKILL, (s) => s.replace(/\n---\n/, '\nversion: 1\n---\n')));
+  const errs = check(({ edit }) => edit(SKILL, (s) => s.replace(/\r?\n---\r?\n/, '\nversion: 1\n---\n')));
   has(errs, 'unsupported frontmatter key "version"');
 });
 
@@ -47,7 +47,7 @@ test('rejects name/folder mismatch', () => {
 test('rejects description over 1024 chars', () => {
   const errs = check(({ edit }) =>
     edit(SKILL, (s) => s.replace(/description: .*/, `description: ${'x'.repeat(1025)}`)));
-  has(errs, 'description');
+  has(errs, '1024');
 });
 
 test('rejects SKILL.md over 500 lines', () => {
@@ -69,7 +69,7 @@ test('rejects default_prompt without $port-any-game', () => {
 
 test('rejects version drift', () => {
   const errs = check(({ edit }) => edit('package.json', (s) => s.replace('"version": "0.1.0"', '"version": "9.9.9"')));
-  has(errs, 'version');
+  has(errs, 'version drift');
 });
 
 test('rejects broken relative link in references', () => {
