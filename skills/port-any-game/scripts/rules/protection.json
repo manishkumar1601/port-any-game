@@ -1,0 +1,279 @@
+[
+ {
+  "id": "steamstub",
+  "class": "DRM",
+  "severity": "STOP",
+  "sections": [
+   ".bind"
+  ],
+  "source": "die"
+ },
+ {
+  "id": "securom",
+  "class": "DRM",
+  "severity": "STOP",
+  "sections": [
+   ".securom",
+   ".dsstext",
+   ".cms_t",
+   ".cms_d"
+  ],
+  "files": [
+   "(^|/)(cms16|cms_95|cms32_95|cms_nt|sintf32)\\.dll$",
+   "(^|/)(secuexp\\.exe|securom_v7_01\\.dat)$"
+  ],
+  "source": "bos"
+ },
+ {
+  "id": "safedisc",
+  "class": "DRM",
+  "severity": "STOP",
+  "sections": [
+   "stxt774",
+   "stxt371"
+  ],
+  "files": [
+   "(^|/)(clcd16|clcd32|dplayerx|drvmgt)\\.dll$",
+   "(^|/)(cloksplash|clokspl)\\.exe$",
+   "(^|/)secdrv\\.sys$",
+   "(^|/)00000001\\.tmp$"
+  ],
+  "source": "bos"
+ },
+ {
+  "id": "starforce",
+  "class": "DRM",
+  "severity": "STOP",
+  "sections": [
+   ".sforce",
+   ".sforce3",
+   ".brick"
+  ],
+  "files": [
+   "(^|/)protect\\.(x86|x64|exe)$",
+   "(^|/)(sfdrvrem\\.exe|sfdrv01\\.sys|sfhlp02\\.sys)$"
+  ],
+  "source": "bos"
+ },
+ {
+  "id": "themida",
+  "class": "PROTECTOR",
+  "severity": "STOP",
+  "sections": [
+   ".themida",
+   ".winlice"
+  ],
+  "source": "die"
+ },
+ {
+  "id": "vmprotect",
+  "class": "PROTECTOR",
+  "severity": "STOP",
+  "sections": [
+   ".vmp0",
+   ".vmp1",
+   ".vmp2"
+  ],
+  "source": "die"
+ },
+ {
+  "id": "enigma",
+  "class": "PROTECTOR",
+  "severity": "STOP",
+  "sections": [
+   ".enigma1",
+   ".enigma2"
+  ],
+  "source": "die"
+ },
+ {
+  "id": "asprotect",
+  "class": "PROTECTOR",
+  "severity": "STOP",
+  "sections": [
+   ".aspr"
+  ],
+  "source": "die"
+ },
+ {
+  "id": "denuvo",
+  "class": "DRM",
+  "severity": "STOP",
+  "imports": [
+   "denuvo64.dll"
+  ],
+  "files": [
+   "(^|/)denuvo[^/]*\\.(sys|exe|dll)$"
+  ],
+  "source": "die"
+ },
+ {
+  "id": "easyanticheat",
+  "class": "ANTI_CHEAT",
+  "severity": "STOP",
+  "files": [
+   "(^|/)EasyAntiCheat(_EOS)?/",
+   "(^|/)EasyAntiCheat(_EOS)?_Setup\\.exe$",
+   "(^|/)EasyAntiCheat(_x64)?\\.dll$",
+   "(^|/)(start_protected_game|eac_launcher)\\.exe$"
+  ],
+  "source": "steamdb"
+ },
+ {
+  "id": "battleye",
+  "class": "ANTI_CHEAT",
+  "severity": "STOP",
+  "files": [
+   "(^|/)BattlEye/",
+   "(^|/)BEService(_x64)?\\.exe$",
+   "(^|/)BEClient(_x64)?\\.dll$"
+  ],
+  "source": "steamdb"
+ },
+ {
+  "id": "gameguard",
+  "class": "ANTI_CHEAT",
+  "severity": "STOP",
+  "files": [
+   "(^|/)GameGuard/",
+   "(^|/)(gameguard|gamemon)\\.des$"
+  ],
+  "source": "steamdb"
+ },
+ {
+  "id": "punkbuster",
+  "class": "ANTI_CHEAT",
+  "severity": "STOP",
+  "files": [
+   "(^|/)(pbsvc|PnkBstrA)\\.exe$",
+   "(^|/)Punkbuster/"
+  ],
+  "source": "steamdb"
+ },
+ {
+  "id": "ubisoft-launcher",
+  "class": "LAUNCHER",
+  "severity": "STOP",
+  "imports": [
+   "uplay_r1_loader.dll",
+   "uplay_r1_loader64.dll",
+   "uplay_r2_loader64.dll",
+   "upc_r2_loader64.dll"
+  ],
+  "files": [
+   "(^|/)(uplay_r1_loader(64)?|uplay_r2_loader64|upc_r2_loader64)\\.dll$"
+  ],
+  "source": "steamdb"
+ },
+ {
+  "id": "gfwl",
+  "class": "DRM",
+  "severity": "STOP",
+  "imports": [
+   "xlive.dll"
+  ],
+  "files": [
+   "(^|/)xlive\\.dll$"
+  ],
+  "source": "steamdb"
+ },
+ {
+  "id": "ea-origin",
+  "class": "LAUNCHER",
+  "severity": "STOP",
+  "files": [
+   "(^|/)__Installer/installerdata\\.xml$",
+   "(^|/)Core/Activation(64)?\\.dll$"
+  ],
+  "source": "bos"
+ },
+ {
+  "id": "ms-store",
+  "class": "LAUNCHER",
+  "severity": "STOP",
+  "files": [
+   "(^|/)(MicrosoftGame\\.config|appxmanifest\\.xml)$"
+  ],
+  "source": "local"
+ },
+ {
+  "id": "pirated-steam-emu",
+  "class": "PIRATED",
+  "severity": "STOP",
+  "files": [
+   "(^|/)steam_emu\\.ini$",
+   "(^|/)SmartSteamEmu[^/]*$",
+   "(^|/)steam_settings/"
+  ],
+  "source": "local"
+ },
+ {
+  "id": "upx",
+  "class": "PACKER",
+  "severity": "WARN",
+  "sections": [
+   "UPX0",
+   "UPX1",
+   "UPX2"
+  ],
+  "source": "die"
+ },
+ {
+  "id": "aspack",
+  "class": "PACKER",
+  "severity": "WARN",
+  "sections": [
+   ".aspack",
+   ".adata"
+  ],
+  "source": "die"
+ },
+ {
+  "id": "mpress",
+  "class": "PACKER",
+  "severity": "WARN",
+  "sections": [
+   ".MPRESS1",
+   ".MPRESS2"
+  ],
+  "source": "die"
+ },
+ {
+  "id": "petite",
+  "class": "PACKER",
+  "severity": "WARN",
+  "sections": [
+   ".petite"
+  ],
+  "source": "die"
+ },
+ {
+  "id": "nspack",
+  "class": "PACKER",
+  "severity": "WARN",
+  "sections": [
+   ".nsp0",
+   ".nsp1"
+  ],
+  "source": "die"
+ },
+ {
+  "id": "pecompact",
+  "class": "PACKER",
+  "severity": "WARN",
+  "sections": [
+   "pec1",
+   "PEC2"
+  ],
+  "source": "die"
+ },
+ {
+  "id": "steam-api",
+  "class": "LAUNCHER",
+  "severity": "WARN",
+  "files": [
+   "(^|/)steam_api(64)?\\.dll$"
+  ],
+  "source": "steamdb"
+ }
+]

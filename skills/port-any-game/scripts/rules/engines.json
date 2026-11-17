@@ -1,0 +1,368 @@
+[
+ {
+  "id": "nwjs",
+  "family": "web-wrapper",
+  "confidence": 0.9,
+  "files": [
+   "(^|/)(nw|nw_elf)\\.dll$",
+   "(^|/)nw\\.pak$",
+   "(^|/)package\\.nw$"
+  ],
+  "source": "steamdb"
+ },
+ {
+  "id": "electron",
+  "family": "web-wrapper",
+  "confidence": 0.9,
+  "files": [
+   "(^|/)resources/app\\.asar$",
+   "(^|/)resources/app/package\\.json$",
+   "(^|/)LICENSE\\.electron\\.txt$"
+  ],
+  "source": "steamdb"
+ },
+ {
+  "id": "rpgmaker-mv",
+  "family": "rpgmaker",
+  "confidence": 0.92,
+  "files": [
+   "(^|/)www/js/rpg_core\\.js$",
+   "(^|/)www/data/System\\.json$"
+  ],
+  "version": {
+   "file": "(^|/)www/js/rpg_core\\.js$",
+   "regex": "RPGMAKER_VERSION\\s*=\\s*[\"']([0-9.]+)[\"']"
+  },
+  "source": "steamdb"
+ },
+ {
+  "id": "rpgmaker-mz",
+  "family": "rpgmaker",
+  "confidence": 0.92,
+  "files": [
+   "(^|/)js/rmmz_core\\.js$"
+  ],
+  "version": {
+   "file": "(^|/)js/rmmz_core\\.js$",
+   "regex": "RPGMAKER_VERSION\\s*=\\s*[\"']([0-9.]+)[\"']"
+  },
+  "source": "steamdb"
+ },
+ {
+  "id": "construct",
+  "family": "web",
+  "confidence": 0.9,
+  "files": [
+   "(^|/)c2runtime\\.js$",
+   "(^|/)c3runtime\\.js$",
+   "(^|/)c3main\\.js$"
+  ],
+  "source": "steamdb"
+ },
+ {
+  "id": "gdevelop",
+  "family": "web",
+  "confidence": 0.8,
+  "files": [
+   "(^|/)gdjs-evtsext__[^/]*\\.js$",
+   "(^|/)runtimegame\\.js$"
+  ],
+  "source": "local"
+ },
+ {
+  "id": "twine",
+  "family": "web",
+  "confidence": 0.8,
+  "magic": [
+   {
+    "file": "\\.html?$",
+    "offset": "head",
+    "hex": "3c74772d73746f727964617461"
+   }
+  ],
+  "source": "local"
+ },
+ {
+  "id": "flash-swf",
+  "family": "flash",
+  "confidence": 0.9,
+  "files": [
+   "\\.swf$"
+  ],
+  "source": "steamdb"
+ },
+ {
+  "id": "flash-projector",
+  "family": "flash",
+  "confidence": 0.95,
+  "overlay": "swf",
+  "source": "die"
+ },
+ {
+  "id": "dos",
+  "family": "dos",
+  "confidence": 0.7,
+  "formats": [
+   "MZ"
+  ],
+  "source": "local"
+ },
+ {
+  "id": "dosbox-wrapper",
+  "family": "dos",
+  "confidence": 0.9,
+  "files": [
+   "(^|/)dosbox(\\.exe|[^/]*\\.conf)$",
+   "(^|/)dosbox/[^/]+$"
+  ],
+  "source": "steamdb"
+ },
+ {
+  "id": "unity-mono",
+  "family": "unity",
+  "confidence": 0.9,
+  "files": [
+   "(^|/)UnityPlayer\\.dll$",
+   "_Data/Managed/Assembly-CSharp\\.dll$",
+   "(^|/)MonoBleedingEdge/"
+  ],
+  "absent": [
+   "(^|/)GameAssembly\\.dll$",
+   "/il2cpp_data/"
+  ],
+  "version": {
+   "file": "_Data/(globalgamemanagers|mainData)$",
+   "regex": "([0-9]{1,4}\\.[0-9]+\\.[0-9]+[abfpx][0-9]+)"
+  },
+  "source": "steamdb"
+ },
+ {
+  "id": "unity-il2cpp",
+  "family": "unity",
+  "confidence": 0.95,
+  "files": [
+   "(^|/)GameAssembly\\.dll$",
+   "/il2cpp_data/Metadata/global-metadata\\.dat$"
+  ],
+  "version": {
+   "file": "_Data/globalgamemanagers$",
+   "regex": "([0-9]{1,4}\\.[0-9]+\\.[0-9]+[abfpx][0-9]+)"
+  },
+  "source": "die"
+ },
+ {
+  "id": "unreal",
+  "family": "unreal",
+  "confidence": 0.9,
+  "files": [
+   "-Win(32|64)-Shipping\\.exe$",
+   "(^|/)Content/Paks/[^/]*\\.pak$"
+  ],
+  "magic": [
+   {
+    "file": "\\.pak$",
+    "offset": "tail",
+    "hex": "e1126f5a"
+   }
+  ],
+  "source": "die"
+ },
+ {
+  "id": "godot",
+  "family": "godot",
+  "confidence": 0.95,
+  "files": [
+   "(^|/)GodotSharp\\.dll$"
+  ],
+  "overlay": "godot-pck",
+  "magic": [
+   {
+    "file": "\\.pck$",
+    "offset": 0,
+    "hex": "47445043"
+   }
+  ],
+  "source": "die"
+ },
+ {
+  "id": "gamemaker",
+  "family": "gamemaker",
+  "confidence": 0.9,
+  "files": [
+   "(^|/)(data\\.win|game\\.unx|game\\.ios|game\\.droid)$"
+  ],
+  "source": "steamdb"
+ },
+ {
+  "id": "renpy",
+  "family": "renpy",
+  "confidence": 0.9,
+  "files": [
+   "(^|/)renpy/__init__\\.py$",
+   "(^|/)game/[^/]*\\.rpyc?$",
+   "(^|/)game/[^/]*\\.rpa$"
+  ],
+  "source": "local"
+ },
+ {
+  "id": "rpgmaker-2k",
+  "family": "rpgmaker",
+  "confidence": 0.92,
+  "files": [
+   "(^|/)RPG_RT\\.(ldb|lmt|exe)$",
+   "(^|/)Map[0-9]{4}\\.lmu$"
+  ],
+  "source": "die"
+ },
+ {
+  "id": "rpgmaker-xp-vx",
+  "family": "rpgmaker",
+  "confidence": 0.9,
+  "files": [
+   "\\.(rgssad|rgss2a|rgss3a)$",
+   "\\.(rxdata|rvdata2?)$"
+  ],
+  "source": "local"
+ },
+ {
+  "id": "ags",
+  "family": "ags",
+  "confidence": 0.9,
+  "overlay": "ags-clib",
+  "files": [
+   "(^|/)(game\\.ags|ac2game\\.dat|acsetup\\.cfg)$"
+  ],
+  "source": "die"
+ },
+ {
+  "id": "love",
+  "family": "love",
+  "confidence": 0.85,
+  "files": [
+   "(^|/)love\\.dll$",
+   "\\.love$"
+  ],
+  "source": "die"
+ },
+ {
+  "id": "java",
+  "family": "java",
+  "confidence": 0.8,
+  "files": [
+   "\\.jar$",
+   "(^|/)lwjgl[^/]*\\.dll$",
+   "(^|/)(jre|runtime)/bin/java(w)?\\.exe$"
+  ],
+  "source": "local"
+ },
+ {
+  "id": "xna-fna-monogame",
+  "family": "dotnet",
+  "confidence": 0.9,
+  "files": [
+   "(^|/)Microsoft\\.Xna\\.Framework[^/]*\\.dll$",
+   "(^|/)(FNA|FNA3D|MonoGame\\.Framework)\\.dll$",
+   "\\.xnb$"
+  ],
+  "source": "steamdb"
+ },
+ {
+  "id": "idtech-doom",
+  "family": "idtech",
+  "confidence": 0.9,
+  "magic": [
+   {
+    "file": "\\.wad$",
+    "offset": 0,
+    "hex": "49574144"
+   },
+   {
+    "file": "\\.wad$",
+    "offset": 0,
+    "hex": "50574144"
+   }
+  ],
+  "source": "local"
+ },
+ {
+  "id": "idtech-quake",
+  "family": "idtech",
+  "confidence": 0.85,
+  "magic": [
+   {
+    "file": "\\.pak$",
+    "offset": 0,
+    "hex": "5041434b"
+   }
+  ],
+  "files": [
+   "\\.pk[34]$"
+  ],
+  "source": "steamdb"
+ },
+ {
+  "id": "build",
+  "family": "build",
+  "confidence": 0.9,
+  "magic": [
+   {
+    "file": "\\.grp$",
+    "offset": 0,
+    "hex": "4b656e53696c7665726d616e"
+   }
+  ],
+  "files": [
+   "(^|/)(game\\.con|build\\.exe|commit\\.dat)$"
+  ],
+  "source": "steamdb"
+ },
+ {
+  "id": "goldsrc",
+  "family": "source",
+  "confidence": 0.85,
+  "files": [
+   "(^|/)(hl\\.exe|hw\\.dll)$"
+  ],
+  "magic": [
+   {
+    "file": "\\.wad$",
+    "offset": 0,
+    "hex": "57414433"
+   }
+  ],
+  "source": "steamdb"
+ },
+ {
+  "id": "scummvm-candidate",
+  "family": "scummvm",
+  "confidence": 0.6,
+  "files": [
+   "(^|/)resource\\.(map|000)$",
+   "(^|/)logdir$",
+   "\\.(la0|lfl)$",
+   "(^|/)data\\.dcp$"
+  ],
+  "source": "local"
+ },
+ {
+  "id": "popcap-sexyapp",
+  "family": "popcap",
+  "confidence": 0.6,
+  "files": [
+   "(^|/)(main\\.pak|popcapgame[0-9]?\\.exe)$",
+   "(^|/)properties/resources\\.xml$"
+  ],
+  "source": "local"
+ },
+ {
+  "id": "native-win32",
+  "family": "native",
+  "confidence": 0.3,
+  "formats": [
+   "PE32",
+   "PE32+"
+  ],
+  "fallback": true,
+  "source": "local"
+ }
+]

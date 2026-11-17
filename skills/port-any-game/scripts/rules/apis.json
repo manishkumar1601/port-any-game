@@ -1,0 +1,162 @@
+[
+ {
+  "dll": "^(ddraw|d3dim|d3drm)\\.dll$",
+  "category": "graphics",
+  "id": "ddraw"
+ },
+ {
+  "dll": "^d3d8\\.dll$",
+  "category": "graphics",
+  "id": "d3d8"
+ },
+ {
+  "dll": "^(d3d9|d3dx9_[0-9]+)\\.dll$",
+  "category": "graphics",
+  "id": "d3d9"
+ },
+ {
+  "dll": "^d3d10(_1)?\\.dll$",
+  "category": "graphics",
+  "id": "d3d10"
+ },
+ {
+  "dll": "^d3d11\\.dll$",
+  "category": "graphics",
+  "id": "d3d11"
+ },
+ {
+  "dll": "^d3d12\\.dll$",
+  "category": "graphics",
+  "id": "d3d12"
+ },
+ {
+  "dll": "^dxgi\\.dll$",
+  "category": "graphics",
+  "id": "dxgi"
+ },
+ {
+  "dll": "^(opengl32|glu32)\\.dll$",
+  "category": "graphics",
+  "id": "opengl"
+ },
+ {
+  "dll": "^vulkan-1\\.dll$",
+  "category": "graphics",
+  "id": "vulkan"
+ },
+ {
+  "dll": "^glide(2x|3x)?\\.dll$",
+  "category": "graphics",
+  "id": "glide"
+ },
+ {
+  "dll": "^wing32\\.dll$",
+  "category": "graphics",
+  "id": "wing"
+ },
+ {
+  "dll": "^sdl\\.dll$",
+  "category": "graphics",
+  "id": "sdl1"
+ },
+ {
+  "dll": "^sdl2\\.dll$",
+  "category": "graphics",
+  "id": "sdl2"
+ },
+ {
+  "dll": "^sdl3\\.dll$",
+  "category": "graphics",
+  "id": "sdl3"
+ },
+ {
+  "dll": "^dsound\\.dll$",
+  "category": "audio",
+  "id": "dsound"
+ },
+ {
+  "dll": "^xaudio2_[0-9]+\\.dll$",
+  "category": "audio",
+  "id": "xaudio2"
+ },
+ {
+  "dll": "^winmm\\.dll$",
+  "category": "audio",
+  "id": "winmm"
+ },
+ {
+  "dll": "^(openal32|soft_oal|wrap_oal)\\.dll$",
+  "category": "audio",
+  "id": "openal"
+ },
+ {
+  "dll": "^fmod(ex|64|studio)?\\.dll$",
+  "category": "audio",
+  "id": "fmod"
+ },
+ {
+  "dll": "^mss(16|32|64)\\.dll$",
+  "category": "audio",
+  "id": "miles"
+ },
+ {
+  "dll": "^bass\\.dll$",
+  "category": "audio",
+  "id": "bass"
+ },
+ {
+  "dll": "^aksoundengine\\.dll$",
+  "category": "audio",
+  "id": "wwise"
+ },
+ {
+  "dll": "^dinput\\.dll$",
+  "category": "input",
+  "id": "dinput"
+ },
+ {
+  "dll": "^dinput8\\.dll$",
+  "category": "input",
+  "id": "dinput8"
+ },
+ {
+  "dll": "^xinput[0-9_]*\\.dll$",
+  "category": "input",
+  "id": "xinput"
+ },
+ {
+  "dll": "^(binkw(32|64)|bink2w(32|64)?)\\.dll$",
+  "category": "video",
+  "id": "bink"
+ },
+ {
+  "dll": "^smackw32\\.dll$",
+  "category": "video",
+  "id": "smacker"
+ },
+ {
+  "dll": "^quartz\\.dll$",
+  "category": "video",
+  "id": "directshow"
+ },
+ {
+  "dll": "^(msvfw32|avifil32)\\.dll$",
+  "category": "video",
+  "id": "vfw"
+ },
+ {
+  "dll": "^wmvcore\\.dll$",
+  "category": "video",
+  "id": "wmv"
+ },
+ {
+  "dll": "^(wsock32|ws2_32)\\.dll$",
+  "category": "network",
+  "id": "winsock"
+ },
+ {
+  "dll": "^(dplayx|dpwsockx)\\.dll$",
+  "category": "network",
+  "id": "directplay"
+ }
+]
