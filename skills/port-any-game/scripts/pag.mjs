@@ -2,6 +2,7 @@
 // Add a command = one line in COMMANDS; its module exports run(argv) -> exit code.
 const COMMANDS = {
   survey: () => import('./survey/survey.mjs'),
+  guard: () => import('./guard.mjs'),
 };
 
 const usage = () => `usage: pag <command> [args]\ncommands: ${Object.keys(COMMANDS).join(', ')}\n`;

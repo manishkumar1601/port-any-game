@@ -1,0 +1,10 @@
+{
+  "_note": "Reviewed denylist of piracy / abandonware / ROM / keygen hosts. Data, not code. Matched against whole hostnames: exact or subdomain suffix, never substring.",
+  "piracy": [
+    "myabandonware.com", "abandonia.com", "oldgamesdownload.com", "vimm.net",
+    "romsfun.com", "romsgames.net", "coolrom.com", "emuparadise.me", "romulation.org", "cdromance.com",
+    "thepiratebay.org", "1337x.to", "nyaa.si", "rutracker.org", "cs.rin.ru",
+    "fitgirl-repacks.site", "dodi-repacks.site", "igg-games.com", "steamunlocked.net", "gog-games.com",
+    "skidrowreloaded.com", "ovagames.com", "pcgamestorrents.com", "game3rb.com", "elamigos.site"
+  ]
+}
