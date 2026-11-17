@@ -1,0 +1,9 @@
+{
+  "_provenance": "documented: https://docs.github.com/en/copilot/reference/hooks-reference",
+  "_notes": "camelCase form (event key \"preToolUse\"). timestamp is Unix ms. toolArgs is typed \"unknown\"; the PascalCase form says tool_input is \"parsed from JSON string when possible\", so camelCase toolArgs is most likely a JSON STRING - guard must accept both string and object. Runtime tool name is lowercase (bash / powershell). Command preToolUse is fail-closed: crash or any non-zero exit (incl. 2) denies. Deny output: {\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"...\"} exit 0.",
+  "sessionId": "sess-0000-spike",
+  "timestamp": 1794922400000,
+  "cwd": "C:\\work\\proj",
+  "toolName": "powershell",
+  "toolArgs": "{\"command\":\"steamless.exe x game.exe\",\"description\":\"x\"}"
+}

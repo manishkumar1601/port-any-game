@@ -1,0 +1,17 @@
+{
+  "_provenance": "documented: https://opencode.ai/docs/build/plugins/server.md",
+  "_notes": "In-process event object (NOT stdin) passed to ctx.permission.hook(\"evaluate\", e => ...). Mutate e.effect/e.message to deny. Fires only for allow/ask outcomes; a configured deny is final. Shell action name is \"shell\"; resources are raw command text. Values illustrative; shape = PermissionEvaluation interface.",
+  "sessionID": "ses_spike",
+  "agent": "build",
+  "action": "shell",
+  "resources": [
+    "steamless.exe x game.exe"
+  ],
+  "metadata": {},
+  "source": {
+    "type": "tool",
+    "messageID": "msg_spike",
+    "id": "call_spike"
+  },
+  "effect": "allow"
+}

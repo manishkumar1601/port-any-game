@@ -1,0 +1,18 @@
+{
+  "_provenance": "documented: https://code.claude.com/docs/en/hooks.md",
+  "_notes": "PreToolUse stdin for a Bash call. Deny = exit 2 + stderr, or hookSpecificOutput.permissionDecision \"deny\". Values illustrative; shape from the doc example.",
+  "session_id": "sess-0000-spike",
+  "prompt_id": "550e8400-e29b-41d4-a716-446655440000",
+  "transcript_path": "C:\\Users\\user\\.claude\\projects\\p\\transcript.jsonl",
+  "cwd": "C:\\work\\proj",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "steamless.exe x game.exe",
+    "description": "Strip packer",
+    "timeout": 120000,
+    "run_in_background": false
+  },
+  "tool_use_id": "toolu_01ABC123"
+}

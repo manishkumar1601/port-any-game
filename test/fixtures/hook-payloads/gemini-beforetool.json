@@ -1,0 +1,13 @@
+{
+  "_provenance": "documented: https://geminicli.com/docs/hooks/reference.md",
+  "_notes": "Gemini CLI BeforeTool; base fields + tool_name/tool_input. Deny = exit 2 + stderr, or {\"decision\":\"deny\",\"reason\":...}. Hook timeout is in MILLISECONDS.",
+  "session_id": "sess-0000-spike",
+  "transcript_path": "C:\\Users\\user\\.gemini\\tmp\\chat.json",
+  "cwd": "C:\\work\\proj",
+  "hook_event_name": "BeforeTool",
+  "timestamp": "2026-11-17T13:00:00.000Z",
+  "tool_name": "run_shell_command",
+  "tool_input": {
+    "command": "steamless.exe x game.exe"
+  }
+}

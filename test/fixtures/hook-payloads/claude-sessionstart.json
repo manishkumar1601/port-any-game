@@ -1,0 +1,10 @@
+{
+  "_provenance": "documented: https://code.claude.com/docs/en/hooks.md",
+  "_notes": "SessionStart stdin. Doc example is a resume; source is startup|resume|clear|compact.",
+  "session_id": "sess-0000-spike",
+  "transcript_path": "C:\\Users\\user\\.claude\\projects\\p\\transcript.jsonl",
+  "cwd": "C:\\work\\proj",
+  "hook_event_name": "SessionStart",
+  "source": "startup",
+  "model": "claude-opus-5"
+}

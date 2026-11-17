@@ -1,0 +1,15 @@
+{
+  "_provenance": "observed: input/output types read from @opencode-ai/plugin 1.19.3 dist/index.d.ts installed by opencode 1.19.3 (isolated home); args.command shape per https://opencode.ai/docs/build/plugins/migrate-v1.md",
+  "_notes": "In-process pair (input, output) for the V1 \"tool.execute.before\" hook. Throw to block. bash tool id is \"bash\"; output.args is the tool arguments (bash: {command, description?, timeout?}). Values illustrative; NOT captured from a live session.",
+  "input": {
+    "tool": "bash",
+    "sessionID": "ses_spike",
+    "callID": "call_spike"
+  },
+  "output": {
+    "args": {
+      "command": "steamless.exe x game.exe",
+      "description": "x"
+    }
+  }
+}

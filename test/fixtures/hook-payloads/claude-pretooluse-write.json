@@ -1,0 +1,15 @@
+{
+  "_provenance": "documented: https://code.claude.com/docs/en/hooks.md",
+  "_notes": "Write on Windows: tool_input.file_path is absolute with BACKSLASHES (doc says so, even under Git Bash). Normalise separators before matching.",
+  "session_id": "sess-0000-spike",
+  "transcript_path": "C:\\Users\\user\\.claude\\projects\\p\\transcript.jsonl",
+  "cwd": "C:\\work\\proj",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "C:\\work\\proj\\build\\index.html",
+    "content": "<!doctype html>"
+  },
+  "tool_use_id": "toolu_01DEF456"
+}

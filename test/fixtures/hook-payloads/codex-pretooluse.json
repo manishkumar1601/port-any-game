@@ -1,0 +1,16 @@
+{
+  "_provenance": "documented: https://learn.chatgpt.com/docs/hooks.md",
+  "_notes": "Codex PreToolUse stdin, Bash tool. Deny = JSON hookSpecificOutput.permissionDecision \"deny\" (exit 0), legacy {decision:\"block\"}, or exit 2 + stderr. Error/timeout/malformed output lets the tool RUN (fail-open). For apply_patch tool_name stays \"apply_patch\" and tool_input.command holds the patch.",
+  "session_id": "sess-0000-spike",
+  "turn_id": "turn-0001",
+  "transcript_path": null,
+  "cwd": "C:\\work\\proj",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-5.5-codex",
+  "permission_mode": "default",
+  "tool_name": "Bash",
+  "tool_use_id": "call_abc123",
+  "tool_input": {
+    "command": "steamless.exe x game.exe"
+  }
+}

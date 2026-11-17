@@ -1,0 +1,22 @@
+{
+  "_provenance": "documented: https://cursor.com/docs/hooks.md",
+  "_notes": "Cursor preToolUse; shell tool is named \"Shell\" and tool_input carries command + working_directory. Common fields (conversation_id etc.) per the doc common schema. Deny = exit 2 or {\"permission\":\"deny\",...}; other non-zero exits fail OPEN.",
+  "conversation_id": "conv-0001",
+  "generation_id": "gen-0001",
+  "model": "claude-opus-4-7-thinking-max",
+  "hook_event_name": "preToolUse",
+  "cursor_version": "1.7.2",
+  "workspace_roots": [
+    "C:\\work\\proj"
+  ],
+  "user_email": null,
+  "transcript_path": null,
+  "tool_name": "Shell",
+  "tool_input": {
+    "command": "steamless.exe x game.exe",
+    "working_directory": "C:\\work\\proj"
+  },
+  "tool_use_id": "abc123",
+  "cwd": "C:\\work\\proj",
+  "agent_message": "Running tool"
+}
