@@ -26,7 +26,9 @@ export function listZip(buf) {
   }
   if (eocd < 0) throw new Error('not a zip: end of central directory not found');
   const count = buf.readUInt16LE(eocd + 10);
-  let p = buf.readUInt32LE(eocd + 16);
+  // A zip appended to an exe has offsets relative to the zip start: base is how far the zip is shifted.
+  const base = Math.max(0, eocd - buf.readUInt32LE(eocd + 12) - buf.readUInt32LE(eocd + 16));
+  let p = buf.readUInt32LE(eocd + 16) + base;
   const out = [];
   for (let i = 0; i < count; i++) {
     if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error('corrupt zip central directory');
@@ -37,7 +39,7 @@ export function listZip(buf) {
       name: buf.toString('utf8', p + 46, p + 46 + nameLen),
       size: buf.readUInt32LE(p + 24),
       method: buf.readUInt16LE(p + 10),
-      offset: buf.readUInt32LE(p + 42),
+      offset: buf.readUInt32LE(p + 42) + base,
       csize: buf.readUInt32LE(p + 20),
       attr: buf.readUInt32LE(p + 38),
     });

@@ -30,7 +30,7 @@ test('new creates layout, port.json and log checklist', async () => {
   const port = await newPort({ gameDir: g, outDir: o });
   assert.equal(port.schema, 'port-any-game/port@1');
   assert.equal(port.lane, 'web-extract');
-  assert.equal(port.data.mode, 'byo');
+  assert.equal(port.data.mode, 'bundled');
   assert.equal(port.data.redistributable, undefined);
   assert.deepEqual(port.acks, []);
   assert.deepEqual(JSON.parse(readFileSync(path.join(o, 'port.json'), 'utf8')), port);
