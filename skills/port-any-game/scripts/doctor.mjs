@@ -49,6 +49,14 @@ function hasGit() {
   try { execFileSync('git', ['--version'], { stdio: 'ignore' }); return true; } catch { return false; }
 }
 
+// Pure; shared with status.mjs. `recommend: false` drops the soft "22+ recommended" nudge.
+export function nodeWarning(version, { recommend = true } = {}) {
+  const major = Number(String(version).split('.')[0]);
+  if (major < 20) return `Node ${version} is too old; need >= 20`;
+  if (recommend && major < 22) return `Node ${version} works; 22+ is recommended`;
+  return null;
+}
+
 export async function doctor() {
   const cache = cacheDir();
   const v = process.versions.node;
@@ -64,8 +72,8 @@ export async function doctor() {
     const tools = path.join(cache, 'tools');
     playwrightCached = readdirSync(tools).some((n) => n.startsWith('playwright-') && existsSync(path.join(tools, n, '.ok')));
   } catch { /* no tools yet */ }
-  if (major < 20) warnings.push(`Node ${v} is too old; need >= 20`);
-  else if (major < 22) warnings.push(`Node ${v} works; 22+ is recommended`);
+  const nw = nodeWarning(v);
+  if (nw) warnings.push(nw);
   if (!git) warnings.push('git not found');
   if (!browsers.length && !playwrightCached) warnings.push('no Chrome/Edge found; verification needs one (or run: pag setup playwright)');
   if (diskFreeBytes && diskFreeBytes < 2 * 1024 ** 3) warnings.push('less than 2 GiB free in the cache dir');

@@ -9,6 +9,7 @@ const COMMANDS = {
   verify: () => import('./verify/verify.mjs'),
   doctor: () => import('./doctor.mjs'),
   setup: () => import('./setup.mjs'),
+  status: () => import('./status.mjs'),
   // guard fails open (Copilot hooks fail closed on a crash): any import failure exits 0 silently.
   guard: () => import('./guard.mjs').catch((e) => ({ run: async () => (process.stderr.write(`pag guard: load error, allowing: ${e?.message}
 `), 0) })),
