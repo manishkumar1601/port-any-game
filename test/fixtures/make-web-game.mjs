@@ -59,10 +59,15 @@ export function gameFiles() {
 
 const put = (file, data) => { mkdirSync(path.dirname(file), { recursive: true }); writeFileSync(file, data); };
 
-// variant: 'nwjs' | 'electron'. Returns dir.
+// variant: 'nwjs' | 'electron' | 'nwjs-redirect' (package.json main is start.html; there is no index.html). Returns dir.
 export function makeWebGame(dir, variant = 'nwjs') {
   const files = gameFiles();
-  if (variant === 'nwjs') {
+  if (variant === 'nwjs-redirect') {
+    files['package.json'] = JSON.stringify({ name: 'web-game-fixture', main: 'start.html' });
+    files['start.html'] = files['index.html'];
+    delete files['index.html'];
+  }
+  if (variant === 'nwjs' || variant === 'nwjs-redirect') {
     put(path.join(dir, 'package.nw'), makeZip(files));
     put(path.join(dir, 'nw.dll'), '');
   } else if (variant === 'electron') {

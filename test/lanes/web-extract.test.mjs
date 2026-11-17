@@ -167,11 +167,19 @@ test('frame hook counts one frame per distinct timestamp, however many rAF consu
   assert.equal(calls, 4, 'every callback still runs');
 });
 
-// Runs the adapter against a fake iframe; fetch decides the HEAD result. Returns {frame, win(), shell events, errors}.
+// Runs the adapter against a fake iframe that behaves like a browser's: one contentWindow object for the iframe's whole
+// life; each navigation swaps its document, and listeners live on the current document's global (the old ones are gone).
+// fetch decides the HEAD result.
 async function startAdapter(headStatus = 200) {
-  const wins = [];
-  const newWin = () => { const w = Object.assign(new EventTarget(), { focus() {} }); wins.push(w); return w; };
-  const frame = Object.assign(new EventTarget(), { style: {}, setAttribute() {}, focus() {}, contentWindow: newWin() });
+  const newDoc = (refresh) => ({ target: new EventTarget(), querySelector: () => (refresh ? {} : null) });
+  const win = {
+    document: newDoc(true), // the first document is the meta-refresh stub
+    focusCalls: 0,
+    focus() { this.focusCalls++; },
+    addEventListener(...a) { this.document.target.addEventListener(...a); },
+    dispatchEvent(e) { return this.document.target.dispatchEvent(e); },
+  };
+  const frame = Object.assign(new EventTarget(), { style: {}, setAttribute() {}, focus() {}, contentWindow: win });
   Object.defineProperty(frame, 'src', { set() { queueMicrotask(() => frame.dispatchEvent(new Event('load'))); } });
   const saved = Object.fromEntries(['window', 'document', 'KeyboardEvent', 'fetch'].map((k) => [k, globalThis[k]]));
   globalThis.window = new EventTarget();
@@ -180,33 +188,43 @@ async function startAdapter(headStatus = 200) {
   globalThis.fetch = async () => ({ ok: headStatus === 200, status: headStatus });
   const restore = () => { for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete globalThis[k]; else globalThis[k] = v; } };
   const adapter = (await import(new URL('adapter.js', ASSETS).href)).default;
-  const errors = [];
-  try {
-    await adapter.start({ host: { append() {} }, audio: {}, reportFrame() {}, reportError: (e) => errors.push(e) });
-  } catch (e) { restore(); throw e; }
-  return { frame, wins, errors, restore, navigate() { frame.contentWindow = newWin(); frame.dispatchEvent(new Event('load')); } };
+  // start() resolves only after the real entry loads; the fake frame loads the meta-refresh stub first and stops there.
+  const started = adapter.start({ host: { append() {} }, audio: {}, reportFrame() {}, reportError() {} });
+  started.catch(() => restore());
+  if (headStatus !== 200) await started;
+  await new Promise((r) => setTimeout(r, 5)); // the stub's load event
+  return { frame, win, restore, started, navigate() { win.document = newDoc(false); frame.dispatchEvent(new Event('load')); } };
 }
 
-test('adapter mirrors iframe keys as cancelable events, also after a redirect to a new document', async () => {
+test('adapter mirrors iframe keys as cancelable events on the redirected document, once per document', async () => {
   const a = await startAdapter();
   try {
-    for (const round of ['first document', 'after redirect']) {
-      if (round === 'after redirect') a.navigate();
-      let shellSaw = null;
-      const onKey = (e) => { shellSaw = e; e.preventDefault(); };
-      window.addEventListener('keydown', onKey);
-      const real = new KeyboardEvent('keydown', { code: 'Tab', key: 'Tab', cancelable: true });
-      a.frame.contentWindow.dispatchEvent(real);
-      window.removeEventListener('keydown', onKey);
-      assert.equal(shellSaw?.cancelable, true, round);
-      assert.equal(real.defaultPrevented, true, `${round}: the real iframe event is cancelled`);
-    }
-    // no duplicates: one real event reaches the shell once, even after a repeated load of the same window
-    let n = 0;
-    window.addEventListener('keyup', () => n++);
-    a.frame.dispatchEvent(new Event('load'));
-    a.frame.contentWindow.dispatchEvent(new KeyboardEvent('keyup', { code: 'Tab', key: 'Tab' }));
-    assert.equal(n, 1);
+    assert.equal(a.win.focusCalls, 0, 'no focus on the meta-refresh stub');
+    const press = (type) => {
+      const seen = [];
+      const on = (e) => { seen.push(e); e.preventDefault(); };
+      window.addEventListener(type, on);
+      const real = new KeyboardEvent(type, { code: 'Tab', key: 'Tab', cancelable: true });
+      a.win.dispatchEvent(real);
+      window.removeEventListener(type, on);
+      return { seen, real };
+    };
+    let p = press('keydown');
+    assert.equal(p.seen.length, 1, 'stub document: mirrored once');
+    assert.equal(p.real.defaultPrevented, true);
+    let resolved = false;
+    a.started.then(() => { resolved = true; });
+    await new Promise((r) => setTimeout(r, 5));
+    assert.equal(resolved, false, 'start() waits for the real entry, not the stub');
+    a.navigate(); // the real entry loads in the same WindowProxy, with a fresh global
+    await a.started;
+    assert.equal(a.win.focusCalls, 1, 'focus once the real entry has loaded');
+    p = press('keydown');
+    assert.equal(p.seen.length, 1, 'redirected document: mirrored, not duplicated');
+    assert.equal(p.seen[0].cancelable, true);
+    assert.equal(p.real.defaultPrevented, true, 'the real iframe event is cancelled');
+    a.frame.dispatchEvent(new Event('load')); // a repeated load event for the same document adds nothing
+    assert.equal(press('keydown').seen.length, 1);
   } finally { a.restore(); }
 });
 

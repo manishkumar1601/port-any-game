@@ -23,18 +23,30 @@ export default {
       window.dispatchEvent(m);
       if (m.defaultPrevented) e.preventDefault();
     }, true);
-    // Every load gets a fresh global (a meta-refresh entry loads twice), so attach per load, once per window.
+    // A meta-refresh entry loads two documents in the same WindowProxy, each with a fresh global: attach per document.
     const seen = new WeakSet();
     const hook = () => {
       const w = f.contentWindow;
-      if (seen.has(w)) return;
-      seen.add(w);
+      if (seen.has(w.document)) return;
+      seen.add(w.document);
       for (const t of ['keydown', 'keyup']) mirror(w, t);
       for (const t of ['pointerdown', 'pointerup']) w.addEventListener(t, () => window.dispatchEvent(new Event(t)), true);
     };
-    f.addEventListener('load', () => { hook(); f.focus(); f.contentWindow.focus(); });
-    ctx.host.append(f);
-    await new Promise((resolve) => { f.addEventListener('load', resolve, { once: true }); f.src = entry; });
+    // start() resolves once the real entry has loaded (not the meta-refresh stub, which would show a blank first frame);
+    // ponytail: a game that is itself a meta-refresh page is released by a 10 s timer.
+    await new Promise((resolve) => {
+      const timer = setTimeout(resolve, 10000);
+      f.addEventListener('load', () => {
+        hook();
+        if (f.contentWindow.document.querySelector('meta[http-equiv="refresh" i]')) return; // the redirect stub
+        clearTimeout(timer);
+        f.focus();
+        f.contentWindow.focus();
+        resolve();
+      });
+      ctx.host.append(f);
+      f.src = entry;
+    });
   },
   pause() { running = false; audio?.suspend().catch(() => {}); },
   resume() { running = true; audio?.resume().catch(() => {}); },

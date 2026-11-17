@@ -2,7 +2,7 @@
 // `node test/e2e/run.mjs <lane>` runs that lane's cases (exit 0 pass or skipped, 1 failure, 2 usage); the lane test
 // files import CASES and run them under node:test. Tasks 17-18 add their lanes to CASES.
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -70,11 +70,20 @@ async function mixedCase() {
   assert.equal(title?.status, 200, `title image: ${JSON.stringify(got.map((q) => [q.url, q.status]))}`);
 }
 
+// package.json main is start.html: index.html is a meta-refresh, so the iframe loads two documents (input mirroring must follow).
+async function redirected() {
+  const r = await once('nwjs-redirect');
+  assert.equal(r.report.status, 'pass', failing(r.report));
+  assert.equal(r.report.checks.find((c) => c.name === 'input')?.status, 'pass', failing(r.report));
+  assert.match(readFileSync(path.join(r.portDir, 'build', 'game', 'index.html'), 'utf8'), /http-equiv="refresh"/);
+}
+
 export const CASES = {
   'web-extract': [
     { name: 'web-extract NW.js fixture passes verify', run: () => passes('nwjs') },
     { name: 'web-extract Electron fixture passes verify', run: () => passes('electron') },
     { name: 'web-extract fixture with mixed-case refs passes', run: mixedCase },
+    { name: 'web-extract redirected main (start.html) passes verify incl. input', run: redirected },
   ],
 };
 
