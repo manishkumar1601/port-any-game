@@ -45,7 +45,7 @@ export async function run(argv, io = {}) {
     if (argv.includes('--json')) { io.out(`${JSON.stringify(s)}\n`); return 0; }
     const v = s.lastVerify ? `${s.lastVerify.status}${s.lastVerify.at ? ` ${String(s.lastVerify.at).slice(0, 10)}` : ''}` : 'never';
     const lines = [
-      `Port ${s.port.name ?? s.port.id} · lane ${s.port.lane} · next: ${s.nextItem ?? 'all checklist items done'} · last verify ${v}`,
+      `Port ${s.port.name ?? s.port.id} · lane ${s.port.lane ?? '?'} · next: ${s.nextItem ?? 'all checklist items done'} · last verify ${v}`,
       ...s.warnings.map((w) => `warning: ${w}`),
     ];
     io.out(`${lines.slice(0, 6).join('\n')}\n`);

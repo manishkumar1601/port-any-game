@@ -1,6 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, copyFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { status, run } from '../skills/port-any-game/scripts/status.mjs';
@@ -69,4 +70,30 @@ test('reads last verify from report.json; --json shape', async () => {
   const j = JSON.parse((await cap(d, ['--json'])).out);
   assert.deepEqual(Object.keys(j), ['port', 'nextItem', 'lastVerify', 'warnings']);
   assert.equal(j.nextItem, 'x');
+});
+
+test('lastVerify falls back to mtime; missing status and corrupt report are tolerated', async () => {
+  const d = mk('veredge', { ...P, lane: undefined }, '');
+  mkdirSync(path.join(d, 'verify'));
+  const rf = path.join(d, 'verify', 'report.json');
+  writeFileSync(rf, JSON.stringify({ status: 'warn' }));
+  const lv = status(d).lastVerify;
+  assert.equal(lv.status, 'warn');
+  assert.ok(Math.abs(Date.parse(lv.at) - Date.now()) < 60_000);
+  assert.match((await cap(d)).out, /lane \? ·/);
+  writeFileSync(rf, JSON.stringify({ at: '2026-01-02T00:00:00Z' }));
+  assert.deepEqual(status(d).lastVerify, { status: 'unknown', at: '2026-01-02T00:00:00Z' });
+  writeFileSync(rf, '{corrupt');
+  assert.deepEqual(status(d).lastVerify, { status: 'unreadable', at: null });
+  assert.match((await cap(d)).out, /last verify unreadable\n/);
+});
+
+test('pag status fails open when status.mjs cannot load', () => {
+  const d = path.join(base, 'loadfail'); mkdirSync(d);
+  copyFileSync(new URL('../skills/port-any-game/scripts/pag.mjs', import.meta.url), path.join(d, 'pag.mjs'));
+  writeFileSync(path.join(d, 'status.mjs'), 'this is not javascript');
+  const r = spawnSync(process.execPath, [path.join(d, 'pag.mjs'), 'status'], { encoding: 'utf8' });
+  assert.equal(r.status, 0);
+  assert.equal(r.stdout, '');
+  assert.match(r.stderr, /pag status: load error/);
 });
