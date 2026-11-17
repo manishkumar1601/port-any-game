@@ -5,6 +5,9 @@
 //   frozen  draws one frame, then the picture never changes (frames still reported)
 //   throw   throws in the first frame (uncaught); with &throw=start it throws inside start() instead
 //   silent  like ok, without audio
+// Extra flags, combinable with any mode:
+//   &wide=1  adds a 1000 px wide strip: overflows a phone viewport, not a desktop one
+//   &post=1  sends one same-origin POST with a body at start (a BYO privacy violation)
 const W = 640;
 const H = 480;
 const STEP = { ArrowLeft: [-16, 0], ArrowRight: [16, 0], ArrowUp: [0, -16], ArrowDown: [0, 16] };
@@ -29,6 +32,8 @@ export default {
     const q = new URLSearchParams(location.search);
     const mode = q.get('mode') || 'ok';
     if (mode === 'throw' && q.get('throw') === 'start') throw new Error('lane-test: thrown in start()');
+    if (q.get('wide') === '1') document.body.append(Object.assign(document.createElement('div'), { style: 'position:absolute;top:0;left:0;width:1000px;height:1px' }));
+    if (q.get('post') === '1') await fetch('./', { method: 'POST', body: 'lane-test' }).catch(() => {});
     const [first] = ctx.files.list();
     if (first) await ctx.files.read(first); // exercises the shell's data path (OPFS for byo, HTTP for bundled)
     const canvas = Object.assign(document.createElement('canvas'), { width: W, height: H });

@@ -6,6 +6,7 @@ const COMMANDS = {
   build: () => import('./build.mjs'),
   pack: () => import('./pack.mjs'),
   serve: () => import('./serve.mjs'),
+  verify: () => import('./verify/verify.mjs'),
   doctor: () => import('./doctor.mjs'),
   setup: () => import('./setup.mjs'),
   // guard fails open (Copilot hooks fail closed on a crash): any import failure exits 0 silently.

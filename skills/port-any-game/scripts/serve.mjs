@@ -72,7 +72,8 @@ function resolve(base, rawPath, caseFallback, log) {
 
 const sha = (s) => crypto.createHash('sha256').update(String(s)).digest();
 
-export function startServer({ root, host = '127.0.0.1', port = 0, password, fixtureDir, caseFallback = false, log = (m) => process.stderr.write(`${m}\n`) }) {
+// fixtureIndex (verify, R31): served as /__fixture/index.json, so verify never writes an index into the game folder.
+export function startServer({ root, host = '127.0.0.1', port = 0, password, fixtureDir, fixtureIndex, caseFallback = false, log = (m) => process.stderr.write(`${m}\n`) }) {
   const base = path.resolve(root);
   const fixture = fixtureDir && path.resolve(fixtureDir);
   const rules = [];
@@ -85,13 +86,18 @@ export function startServer({ root, host = '127.0.0.1', port = 0, password, fixt
       for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
       res.setHeader('X-Robots-Tag', 'noindex, nofollow'); // last: _headers must not weaken it
       res.statusCode = status;
-      if (body) body.pipe(res); else res.end();
+      if (body?.pipe) body.pipe(res); else res.end(body);
     };
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(405, { Allow: 'GET, HEAD' });
     if (password) {
       const m = /^Basic (.+)$/i.exec(req.headers.authorization || '');
       const given = m ? Buffer.from(m[1], 'base64').toString('utf8').split(':').slice(1).join(':') : '';
       if (!m || !crypto.timingSafeEqual(sha(given), sha(password))) return send(401, { 'WWW-Authenticate': 'Basic realm="port-any-game"' });
+    }
+    // ponytail: a game file named index.json at the top of the game folder is shadowed by this; the import reports it.
+    if (fixtureIndex && pathname === '/__fixture/index.json') {
+      const json = Buffer.from(JSON.stringify(fixtureIndex));
+      return send(200, { 'Content-Type': MIME['.json'], 'Content-Length': json.length }, req.method === 'HEAD' ? undefined : json);
     }
     let dir = base, rel = pathname;
     if (fixture && (pathname === '/__fixture' || pathname.startsWith('/__fixture/'))) { dir = fixture; rel = pathname.slice('/__fixture'.length); }
