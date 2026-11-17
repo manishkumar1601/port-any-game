@@ -1,5 +1,5 @@
 {
-  "_provenance": "observed: input/output types read from @opencode-ai/plugin 1.19.3 dist/index.d.ts installed by opencode 1.19.3 (isolated home); args.command shape per https://opencode.ai/docs/build/plugins/migrate-v1.md",
+  "_provenance": "documented: https://opencode.ai/docs/build/plugins/migrate-v1.md (typed: input/output shape cross-checked against dist/index.d.ts of installed @opencode-ai/plugin 1.19.3; NOT a live capture, values illustrative)",
   "_notes": "In-process pair (input, output) for the V1 \"tool.execute.before\" hook. Throw to block. bash tool id is \"bash\"; output.args is the tool arguments (bash: {command, description?, timeout?}). Values illustrative; NOT captured from a live session.",
   "input": {
     "tool": "bash",

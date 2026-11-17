@@ -38,7 +38,7 @@ Exactly note 06 §5.3 `opencode/plugin/index.js` (dual object, imports `check` f
    - `pag.js` containing `export { default } from "./port-any-game/index.js";`: **loaded** (`server() called`).
    - `legacy.js` with `export const Legacy = async () => ({})`: loaded.
 5. User-shell path: `POST /session/<id>/shell {agent:"build", command:"echo hi steamless.exe x"}` returned 200 and ran the command, but `check()` was never called (no command line in `$GUARD_LOG`) while the plugin was loaded. So `tool.execute.before` does not fire for user shell commands. Sessions use the free built-in model entry (`big-pickle`) only as a label here; this endpoint makes no model call.
-6. v1 hook types (observed, installed d.ts): `"tool.execute.before"?: (input: { tool: string; sessionID: string; callID: string }, output: { args: any }) => Promise<void>`. Saved as `test/fixtures/hook-payloads/opencode-v1-tool-execute-before.json`.
+6. v1 hook types (observed by reading the installed d.ts; types only, not a live capture): `"tool.execute.before"?: (input: { tool: string; sessionID: string; callID: string }, output: { args: any }) => Promise<void>`. Saved as `test/fixtures/hook-payloads/opencode-v1-tool-execute-before.json`.
 
 ## Mocked check (observed in Node 22, mock ctx; not OpenCode itself)
 
