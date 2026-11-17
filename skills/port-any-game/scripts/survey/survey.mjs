@@ -108,17 +108,18 @@ export async function survey(gameDir, { maxFiles = 200000 } = {}) {
 function human(s) {
   const v = s.verdict, p = s.lanes.find((l) => l.lane === v.primary_lane);
   const main = s.executables.find((e) => e.role === 'main');
-  const lines = [
+  const head = [
     `Verdict: ${v.overall}${p ? ` | lane: ${p.lane}${p.odds ? ` (odds ${p.odds})` : ''}` : ' | lane: none available yet'}`,
     `Game: ${s.store.title_guess ?? s.target.label} | engine: ${s.engines[0]?.id ?? 'unknown'} | exe: ${main ? `${main.format} ${main.machine ?? ''}`.trim() : 'none'} | ${s.target.file_count} files`,
-    `Why: ${v.reasons[0]}`,
   ];
-  if (v.reasons.length > 1) lines.push(`Also: ${v.reasons.at(-1)}`);
-  lines.push(`Catalog: ${s.catalog_matches.length ? s.catalog_matches.slice(0, 3).map((m) => `${m.game_id} (${m.tier})`).join(', ') : 'no match'}`);
+  const tail = [`Catalog: ${s.catalog_matches.length ? s.catalog_matches.slice(0, 3).map((m) => `${m.game_id} (${m.tier})`).join(', ') : 'no match'}`];
   const warn = [...s.protection.filter((x) => x.severity === 'WARN').map((x) => x.id), ...(s.skipped.length ? [`${s.skipped.length} entries skipped`] : []), ...(s.truncated ? ['file cap reached'] : [])];
-  if (warn.length) lines.push(`Warnings: ${warn.join(', ')}`);
-  if (v.required_acknowledgements.length) lines.push(`Acknowledgements: ${v.required_acknowledgements.join(', ')}`);
-  return lines.slice(0, 8).join('\n');
+  if (warn.length) tail.push(`Warnings: ${warn.join(', ')}`);
+  if (v.required_acknowledgements.length) tail.push(`Acknowledgements: ${v.required_acknowledgements.join(', ')}`);
+  // reasons fill the remaining lines, most important first; on STOP the remote-play line (last) always survives
+  const slots = 8 - head.length - tail.length;
+  const r = v.reasons.length <= slots ? v.reasons : v.overall === 'STOP' ? [...v.reasons.slice(0, slots - 1), v.reasons.at(-1)] : v.reasons.slice(0, slots);
+  return [...head, ...r.map((x, i) => (i ? `  ${x}` : `Why: ${x}`)), ...tail].join('\n');
 }
 
 // CLI entry (loaded lazily by pag.mjs). Returns the exit code: 0 GO/HARD, 4 STOP, 2 usage error.
@@ -131,7 +132,9 @@ export async function run(argv, io = { out: (t) => process.stdout.write(t), err:
   let s;
   try { s = await survey(args.positionals[0]); } catch (e) { io.err(`pag survey: ${e.message}\n`); return 2; }
   const json = JSON.stringify(s, null, 2);
-  if (args.values.out) writeFileSync(args.values.out, json + '\n');
+  if (args.values.out) {
+    try { writeFileSync(args.values.out, json + '\n'); } catch (e) { io.err(`pag survey: cannot write --out file (${SCRUB(e.message)})\n`); return 2; }
+  }
   io.out((args.values.json ? json : human(s)) + '\n');
   return s.verdict.overall === 'STOP' ? 4 : 0;
 }

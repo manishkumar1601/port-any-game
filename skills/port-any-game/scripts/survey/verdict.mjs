@@ -25,7 +25,8 @@ export function decide(partial) {
 
   const usable = ranked.filter((l) => l.verdict !== 'NO');
   const primary = usable.find((l) => l.available) ?? null;
-  const firstBlocked = usable.find((l) => !l.available && (!primary || l.rung < primary.rung));
+  // remote-play is the universal fallback: only worth naming when nothing else is available
+  const firstBlocked = usable.find((l) => !l.available && (primary ? l.lane !== 'remote-play' && usable.indexOf(l) < usable.indexOf(primary) : true));
   if (primary) reasons.push(`${primary.lane}: ${primary.why}`);
   else reasons.push('No lane built in this milestone fits this game.');
   if (firstBlocked) reasons.push(`Best fit ${firstBlocked.lane} (${firstBlocked.why}) is available in ${firstBlocked.milestone}.`);
@@ -35,9 +36,12 @@ export function decide(partial) {
     reasons.push(`Ambiguous engine: ${eng[0].id} vs ${eng[1].id}; run the deep-mode oracles (scummvm --detect, diec) to decide.`);
   }
 
+  for (const m of (partial.catalog_matches ?? []).filter((x) => x.tier === 'title')) {
+    reasons.push(`Possible existing port: ${m.ports?.[0]?.name ?? m.game_id} — confirm the game title.`);
+  }
+  for (const p of warns) reasons.push(`Warning: ${p.id} (${p.class}) found; acknowledgement required. Packed binaries are never unpacked automatically.`);
   if (primary) for (const a of LANES[primary.lane].acks) acks.add(a);
   for (const p of warns) acks.add(p.id === 'upx' ? 'ACK_UPX_PACKED' : 'ACK_PROTECTION_WARN');
-  for (const p of warns) reasons.push(`Warning: ${p.id} (${p.class}) found; acknowledgement required. Packed binaries are never unpacked automatically.`);
 
   return {
     lanes, legal_flags,

@@ -1,7 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, chmodSync } from 'node:fs';
-import { open } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { survey } from '../../skills/port-any-game/scripts/survey/survey.mjs';
@@ -119,22 +119,73 @@ test('survey handles unicode/space paths', async () => {
   assert.deepEqual(s.skipped, []);
 });
 
-test('survey skips unreadable and broken entries and caps file count', async () => {
-  const files = {};
-  for (let i = 0; i < 100; i++) files[`f${String(i).padStart(3, '0')}.dat`] = 'x';
-  const dir = game(files);
-  let probes = 0;
-  try { symlinkSync(path.join(dir, 'does-not-exist'), path.join(dir, 'a-dangling')); probes++; } catch { /* symlinks not permitted here: skip that part */ }
+const filesN = (k) => Object.fromEntries(Array.from({ length: k }, (_, i) => [`f${String(i).padStart(3, '0')}.dat`, 'x']));
+
+test('survey skips unreadable and broken entries and caps file count', async (t) => {
+  const dir = game(filesN(100));
   const locked = path.join(dir, 'a-locked.dat');
   writeFileSync(locked, 'secret');
-  chmodSync(locked, 0o000);
-  try { await (await open(locked, 'r')).close(); } catch { probes++; } // chmod only bites on POSIX non-root
+  let child;
+  try {
+    if (process.platform === 'win32') {
+      // exclusive lock held by a separate process (no shell), same technique as the walk test
+      const quoted = locked.replace(/'/g, "''");
+      child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+        `$f=[IO.File]::Open('${quoted}','Open','Read','None'); Write-Output ready; Start-Sleep 120`], { stdio: ['ignore', 'pipe', 'ignore'] });
+      await new Promise((resolve, reject) => {
+        child.once('error', reject);
+        child.once('exit', () => reject(new Error('lock helper exited early')));
+        child.stdout.on('data', (d) => d.toString().includes('ready') && resolve());
+      });
+    } else {
+      if (process.getuid?.() === 0) return t.skip('running as root, chmod 000 does not block reads');
+      chmodSync(locked, 0o000);
+    }
+    const s = await survey(dir, { maxFiles: 50 });
+    assert.equal(s.truncated, true);
+    assert.ok(s.skipped.some((x) => x.path === 'a-locked.dat'), 'locked file is reported as skipped');
+    assert.ok(s.skipped.every((x) => !x.reason.includes(base)));
+    // walk counts every non-directory entry toward the cap; survey splits them into readable and skipped
+    assert.equal(s.target.file_count + s.skipped.length, 50);
+  } finally {
+    if (child) {
+      const gone = new Promise((r) => (child.exitCode !== null ? r() : child.once('exit', r)));
+      child.kill();
+      await gone;
+    } else chmodSync(locked, 0o600);
+  }
+});
+
+test('survey reports a dangling symlink as skipped and counts it toward the cap', async (t) => {
+  const dir = game(filesN(100));
+  try { symlinkSync(path.join(dir, 'does-not-exist'), path.join(dir, 'a-dangling')); } catch { return t.skip('symlink creation not permitted on this machine'); }
   const s = await survey(dir, { maxFiles: 50 });
+  assert.ok(s.skipped.some((x) => x.path === 'a-dangling' && /symlink/.test(x.reason)));
   assert.equal(s.truncated, true);
-  assert.equal(s.target.file_count, 50);
-  if (probes) assert.ok(s.skipped.length >= 1);
-  assert.ok(s.skipped.every((x) => !x.reason.includes(base)));
-  chmodSync(locked, 0o600);
+  assert.equal(s.target.file_count + s.skipped.length, 50);
+});
+
+test('ProductName reaches store.title_guess through survey', async () => {
+  const s = await survey(game({ 'Game.exe': makePE({ productName: 'Zork Reborn' }) }));
+  assert.equal(s.store.title_guess, 'Zork Reborn');
+});
+
+test('title-only catalog hit does not outrank a GO lane', async () => {
+  // ProductName "Caesar III" = title-only catalog hit; package.nw makes web-extract a GO lane
+  const s = await survey(game({ 'package.nw': 'PK', 'Game.exe': makePE({ productName: 'Caesar III' }) }));
+  assert.ok(s.catalog_matches.some((m) => m.game_id === 'caesar3' && m.tier === 'title'));
+  assert.equal(s.lanes.find((l) => l.lane === 'known-port').verdict, 'HARD');
+  assert.equal(s.verdict.primary_lane, 'web-extract');
+  assert.equal(s.verdict.overall, 'GO');
+  assert.match(s.verdict.reasons.join('\n'), /Possible existing port: .*confirm the game title/);
+});
+
+test('confident catalog match (store/signature) still makes known-port primary', async () => {
+  for (const files of [{ 'steam_appid.txt': '517790', 'package.nw': 'PK' }, { 'c3.emp': 'x', 'package.nw': 'PK' }]) {
+    const s = await survey(game(files));
+    assert.equal(s.verdict.primary_lane, 'known-port');
+    assert.equal(s.verdict.overall, 'GO');
+  }
 });
 
 test('survey rejects a missing directory', async () => {

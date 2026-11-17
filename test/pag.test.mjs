@@ -52,6 +52,22 @@ test('pag survey --out writes JSON', () => {
   assert.equal(JSON.parse(readFileSync(out, 'utf8')).verdict.primary_lane, 'web-extract');
 });
 
+test('--out to an unwritable path exits 2 without leaking an absolute path', () => {
+  const bad = path.join(base, 'no-such-dir', 'out.json');
+  const r = run('survey', go(), '--out', bad);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /--out/);
+  assert.ok(!r.stderr.includes(base));
+});
+
+test('human output keeps the remote-play line on STOP even with warnings', () => {
+  const dir = game('stopwarn', { 'game.exe': makePE({ sections: [{ name: '.bind', size: 512 }, { name: 'UPX0', size: 512 }, { name: 'UPX1', size: 512 }] }) });
+  const r = run('survey', dir);
+  assert.equal(r.status, 4);
+  assert.match(r.stdout, /remote-play/);
+  assert.ok(r.stdout.trimEnd().split('\n').length <= 8);
+});
+
 test('usage errors exit 2', () => {
   assert.equal(run().status, 2);
   assert.equal(run('nope').status, 2);

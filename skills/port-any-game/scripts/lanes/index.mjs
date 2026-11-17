@@ -9,7 +9,7 @@ export const LANES = Object.fromEntries([webExtract, knownPort, rtRuffle, dosJsd
 
 const VRANK = { GO: 0, HARD: 1, NO: 2 };
 
-// Lanes that apply (non-NO), in ladder order: rung, then GO before HARD, then known-port first.
+// Lanes that apply (non-NO), best first: GO before HARD, then rung, then known-port first.
 // Under a STOP protection every in-browser lane that would apply is reported as NO (sorted last);
 // remote-play keeps its verdict.
 export function rankLanes(survey) {
@@ -22,5 +22,5 @@ export function rankLanes(survey) {
     out.push({ lane: l.id, verdict, why, available: l.available, milestone: l.milestone, odds: l.odds, rung: l.rung });
   }
   return out.sort((a, b) => VRANK[a.verdict] === 2 || VRANK[b.verdict] === 2 ? VRANK[a.verdict] - VRANK[b.verdict]
-    : a.rung - b.rung || VRANK[a.verdict] - VRANK[b.verdict] || (b.lane === 'known-port') - (a.lane === 'known-port'));
+    : VRANK[a.verdict] - VRANK[b.verdict] || a.rung - b.rung || (b.lane === 'known-port') - (a.lane === 'known-port'));
 }
