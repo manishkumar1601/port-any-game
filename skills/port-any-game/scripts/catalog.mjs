@@ -14,15 +14,17 @@ const RANK = { store: 0, signature: 1, engine: 2, title: 3 };
 export function matchCatalog(catalog, { identity = {}, files = [], engines = [] }) {
   const engineIds = new Set(engines.map((e) => e.id));
   const want = tokens(identity.title_guess);
+  const steam = identity.steam_appid == null ? null : String(identity.steam_appid);
+  const gog = identity.gog_id == null ? null : String(identity.gog_id);
   const out = [];
   for (const g of catalog.games) {
     let tier = null;
-    if ((identity.steam_appid && g.ids?.steam?.includes(identity.steam_appid)) ||
-        (identity.gog_id && g.ids?.gog?.includes(identity.gog_id))) tier = 'store';
-    else if (g.signatures?.some((s) => {
-      const re = new RegExp(s.path, 'i');
-      return files.some((f) => re.test(f.rel) && (s.size == null || f.size === s.size));
-    })) tier = 'signature'; // ponytail: sha256 not checked (survey hashes only executables)
+    // compile once per signature; a bad pattern in data is skipped, not fatal
+    const sigs = (g.signatures ?? []).flatMap((s) => {
+      try { return [{ re: new RegExp(s.path, 'i'), size: s.size }]; } catch { return []; }
+    });
+    if ((steam && g.ids?.steam?.includes(steam)) || (gog && g.ids?.gog?.includes(gog))) tier = 'store';
+    else if (sigs.some((s) => files.some((f) => s.re.test(f.rel) && (s.size == null || f.size === s.size)))) tier = 'signature'; // ponytail: sha256 not checked (survey hashes only executables)
     else if (g.engines?.some((e) => engineIds.has(e))) tier = 'engine';
     else if (sameSet(want, tokens(g.title))) tier = 'title';
     if (tier) out.push({ game_id: g.id, tier, needs_confirm: tier === 'engine' || tier === 'title', ports: g.ports });

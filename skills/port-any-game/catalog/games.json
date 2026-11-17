@@ -190,7 +190,7 @@
    },
    "signatures": [
     {
-     "path": "(^|/)main\\.pak$"
+     "path": "(^|/)plantsvszombies\\.exe$"
     }
    ],
    "ports": [

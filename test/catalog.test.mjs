@@ -73,3 +73,36 @@ test('high legal_risk is flagged', () => {
   const m = matchCatalog(cat, { identity: { ...none, steam_appid: '12110' }, files: [], engines: [] });
   assert.equal(m[0].ports[0].legal_risk, 'high');
 });
+
+const sigsOf = (id) => cat.games.find((g) => g.id === id).signatures;
+
+test('every catalog signature compiles', () => {
+  for (const g of cat.games) for (const s of g.signatures) assert.doesNotThrow(() => new RegExp(s.path, 'i'), g.id);
+});
+
+test('invalid regex in data is skipped not thrown', () => {
+  const bad = { schema: 'x', games: [
+    { id: 'bad', title: 'Bad', ids: {}, signatures: [{ path: '(' }], ports: [] },
+    { id: 'ok', title: 'Ok', ids: {}, signatures: [{ path: 'ok\.bin$' }], ports: [] },
+  ] };
+  const m = matchCatalog(bad, { identity: none, files: [f('ok.bin')], engines: [] });
+  assert.deepEqual(m.map((x) => x.game_id), ['ok']);
+});
+
+test('size filter excludes wrong-size file', () => {
+  const c = { schema: 'x', games: [{ id: 'g', title: 'G', ids: {}, signatures: [{ path: 'a\.bin$', size: 5 }], ports: [] }] };
+  const file = (size) => ({ ...f('a.bin'), size });
+  assert.equal(matchCatalog(c, { identity: none, files: [file(4)], engines: [] }).length, 0);
+  assert.equal(matchCatalog(c, { identity: none, files: [file(5)], engines: [] })[0].tier, 'signature');
+});
+
+test('numeric steam_appid still matches', () => {
+  const m = matchCatalog(cat, { identity: { ...none, steam_appid: 517790 }, files: [], engines: [] });
+  assert.equal(m[0].tier, 'store');
+});
+
+test('generic PopCap main.pak alone does not match pvz', () => {
+  const m = matchCatalog(cat, { identity: none, files: [f('main.pak'), f('properties/x.xml')], engines: [] });
+  assert.ok(!m.some((x) => x.game_id === 'pvz'));
+  assert.ok(sigsOf('pvz').length > 0);
+});
