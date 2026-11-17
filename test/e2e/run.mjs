@@ -30,12 +30,11 @@ export const skipReason = () => {
   return false;
 };
 
-// 20 s soak: a game in an iframe is still warming up (heap grows ~20% in the first 10 s), so 5-10 s soaks fail the memory check.
 let n = 0;
 const failing = (r) => JSON.stringify(r.checks.filter((c) => c.status !== 'pass'), null, 1);
 
 // fixture(dir) makes the game install and returns its folder; the lane builds it. Returns {portDir, distDir, built, survey, report}.
-export async function pipeline(laneId, fixture, { soakSec = 20 } = {}) {
+export async function pipeline(laneId, fixture, { soakSec = 5 } = {}) {
   const dir = path.join(base, `case-${++n}`);
   const gameDir = fixture(path.join(dir, 'install'));
   const s = await survey(gameDir);

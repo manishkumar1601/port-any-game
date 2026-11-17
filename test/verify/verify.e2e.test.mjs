@@ -59,9 +59,10 @@ async function verifyMode(query, { soakSec = 0, stages } = {}) {
 test('lane-test ok passes', { skip }, async () => {
   const { dir, gameBefore, r } = await verifyMode('mode=ok', { soakSec: 2, stages: ['gameplay'] });
   assert.equal(r.status, 'pass', failing(r));
-  for (const name of ['blank', 'frozen', 'fps', 'input', 'audio', 'save', 'viewports', 'loop', 'memory', 'privacy', 'errors', 'requests', 'stages']) {
+  for (const name of ['blank', 'frozen', 'fps', 'input', 'audio', 'save', 'viewports', 'loop', 'privacy', 'errors', 'requests', 'stages']) {
     assert.equal(check(r, name)?.status, 'pass', `${name}: ${failing(r)}`);
   }
+  assert.equal(check(r, 'memory')?.status, 'skip', failing(r)); // R37: a 2 s soak is too short to judge memory
   const out = path.join(dir, 'verify');
   assert.equal(JSON.parse(readFileSync(path.join(out, 'report.json'), 'utf8')).status, 'pass');
   assert.ok(existsSync(path.join(out, 'console.log')));

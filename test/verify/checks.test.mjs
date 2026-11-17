@@ -126,6 +126,13 @@ test('judge memory: < 5 %/min pass, 5-10 warn, > 10 fail, unmeasurable is skip',
   assert.equal(judge({ memory: { seconds: 60, growthPctPerMin: null } }).status, 'pass', 'skip is neither warn nor fail');
 });
 
+test('judge memory: soaks under 30 s are skipped, 30 s is judged (R37)', () => {
+  const at = (seconds) => judge({ memory: { seconds, growthPctPerMin: 50 } }).checks.find((c) => c.name === 'memory');
+  assert.equal(at(29).status, 'skip');
+  assert.match(at(29).detail, /soak too short to judge memory/);
+  assert.equal(at(30).status, 'fail');
+});
+
 test('heapGrowth compares post-GC floors and ignores growth under 1 MiB', () => {
   const MiB = 1024 * 1024;
   assert.equal(heapGrowth([10 * MiB, 10.5 * MiB, 10.9 * MiB], 60), 0, 'under the 1 MiB noise floor');

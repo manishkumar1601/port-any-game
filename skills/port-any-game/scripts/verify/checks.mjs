@@ -12,6 +12,7 @@ export const THRESHOLDS = {
   audioRms: 0.001, // -60 dBFS
   memWarn: 5, // soak growth %/min: < 5 pass, 5-10 warn...
   memFail: 10, // ...> 10 fail
+  memMinSoakS: 30, // R37: shorter soaks only see warm-up growth, so memory is not judged
   heapNoiseBytes: 1024 * 1024, // heap growth under 1 MiB over the soak is noise
   readyFirstS: 120, // first load (BYO import or download) times out after this
   readyCachedS: 30, // a reload (files cached) times out after this
@@ -146,7 +147,8 @@ export function judge(m, t = THRESHOLDS) {
   }
   if (m.memory) {
     const { seconds, growthPctPerMin: g } = m.memory;
-    if (g == null) add('memory', 'skip', `heap not measurable in this browser (${seconds.toFixed(0)} s soak)`);
+    if (seconds < t.memMinSoakS) add('memory', 'skip', 'soak too short to judge memory');
+    else if (g == null) add('memory', 'skip', `heap not measurable in this browser (${seconds.toFixed(0)} s soak)`);
     else add('memory', g > t.memFail ? 'fail' : g >= t.memWarn ? 'warn' : 'pass', `heap growth ${g.toFixed(1)}%/min over a ${seconds.toFixed(0)} s soak`);
   }
   if (m.stages) {
