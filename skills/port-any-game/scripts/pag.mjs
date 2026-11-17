@@ -5,6 +5,7 @@ const COMMANDS = {
   new: () => import('./new.mjs'),
   build: () => import('./build.mjs'),
   pack: () => import('./pack.mjs'),
+  package: () => import('./package.mjs'),
   serve: () => import('./serve.mjs'),
   verify: () => import('./verify/verify.mjs'),
   doctor: () => import('./doctor.mjs'),

@@ -139,6 +139,9 @@ export function startServer({ root, host = '127.0.0.1', port = 0, password, fixt
   });
 }
 
+// R28: a per-game default port in 20000-29999 (below the OS ephemeral ranges), so a packaged launcher and `pag serve` agree.
+export const stablePort = (id) => 20000 + (sha(id).readUInt32BE(0) % 10000);
+
 const USAGE = 'usage: pag serve [dist] [--port N] [--lan --password-env VAR] [--open]\n';
 
 function nearestPort(dir) {
@@ -156,8 +159,9 @@ export async function run(argv, io = { out: (t) => process.stdout.write(t), err:
   } catch (e) { io.err(`pag serve: ${e.message}\n${USAGE}`); return 2; }
   const { values } = args;
   const root = path.resolve(args.positionals[0] ?? 'dist');
-  const portNum = values.port === undefined ? 0 : Number(values.port);
-  if (!Number.isInteger(portNum) || portNum < 0 || portNum > 65535) { io.err(`pag serve: invalid --port\n${USAGE}`); return 2; }
+  const explicitPort = values.port !== undefined;
+  const portNum = explicitPort ? Number(values.port) : undefined;
+  if (explicitPort && (!Number.isInteger(portNum) || portNum < 0 || portNum > 65535)) { io.err(`pag serve: invalid --port\n${USAGE}`); return 2; }
   if (!statOf(root)?.isDirectory()) { io.err(`pag serve: ${root} is not a directory (build or pack the port first)\n${USAGE}`); return 2; }
 
   let password;
@@ -169,9 +173,14 @@ export async function run(argv, io = { out: (t) => process.stdout.write(t), err:
   let caseFallback = false;
   try { caseFallback = JSON.parse(readFileSync(path.join(root, 'shell.json'), 'utf8').replace(/^\uFEFF/, '')).serve?.caseFallback === true; } catch { /* defaults */ }
 
+  const known = nearestPort(root);
+  const port = explicitPort ? portNum : stablePort(known.id ?? root);
   let srv;
-  try { srv = await startServer({ root, host: values.lan ? '0.0.0.0' : '127.0.0.1', port: portNum, password, caseFallback, log: (m) => io.err(`${m}\n`) }); }
-  catch (e) { io.err(`pag serve: ${e.message}\n`); return 2; }
+  try { srv = await startServer({ root, host: values.lan ? '0.0.0.0' : '127.0.0.1', port, password, caseFallback, log: (m) => io.err(`${m}\n`) }); }
+  catch (e) {
+    if (e.code === 'EADDRINUSE') { io.err(`pag serve: port ${port} is in use (another copy of this game may already be running); pass --port\n`); return 1; }
+    io.err(`pag serve: ${e.message}\n`); return 2;
+  }
   io.out(`${srv.url}\n`);
   if (values.open) {
     const [cmd, ...a] = process.platform === 'win32' ? ['explorer.exe', srv.url] : [process.platform === 'darwin' ? 'open' : 'xdg-open', srv.url];

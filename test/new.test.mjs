@@ -39,7 +39,7 @@ test('new creates layout, port.json and log checklist', async () => {
   }
   assert.equal(readFileSync(path.join(o, 'CLAUDE.md'), 'utf8').trim(), '@AGENTS.md');
   assert.ok(readFileSync(path.join(o, 'AGENTS.md'), 'utf8').split('\n').length <= 40);
-  for (const d of ['game/', 'work/', 'build/', 'dist/', 'analysis/']) assert.ok(readFileSync(path.join(o, '.gitignore'), 'utf8').split('\n').includes(d));
+  for (const d of ['game/', 'work/', 'build/', 'dist/', 'analysis/', 'package/']) assert.ok(readFileSync(path.join(o, '.gitignore'), 'utf8').split('\n').includes(d));
   const log = readFileSync(path.join(o, 'PORTING_LOG.md'), 'utf8');
   for (const c of LANES['web-extract'].checklist) assert.ok(log.includes(`- [ ] ${c}`), c);
   assert.ok(lstatSync(path.join(o, 'game')).isSymbolicLink());

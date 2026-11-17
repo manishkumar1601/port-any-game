@@ -230,3 +230,27 @@ test('reversed range is ignored (200 full)', async () => serving({}, async (url)
   assert.equal(r.status, 200);
   assert.equal(await r.text(), '0123456789');
 }));
+
+test('stablePort is deterministic and in 20000-29999', async () => {
+  const { stablePort } = await import('../skills/port-any-game/scripts/serve.mjs');
+  assert.equal(stablePort('some-game'), stablePort('some-game'));
+  assert.notEqual(stablePort('some-game'), stablePort('other-game'));
+  for (const id of ['a', 'b', 'c', 'dos-keen', 'x'.repeat(100)]) { const p = stablePort(id); assert.ok(Number.isInteger(p) && p >= 20000 && p <= 29999, id); }
+});
+
+test('cli: port in use gives a clear error and exit 1', async () => {
+  const { stablePort } = await import('../skills/port-any-game/scripts/serve.mjs');
+  const net = await import('node:net');
+  const d = path.join(base, 'busy'); mkdirSync(path.join(d, 'dist'), { recursive: true });
+  writeFileSync(path.join(d, 'port.json'), JSON.stringify({ id: 'busy-game' }));
+  writeFileSync(path.join(d, 'dist', 'index.html'), 'x');
+  const blocker = net.createServer();
+  const listening = await new Promise((r) => blocker.once('error', () => r(false)).listen(stablePort('busy-game'), '127.0.0.1', () => r(true)));
+  // when the stable port is already taken on this machine, that is exactly the condition under test
+  try {
+    let text = '';
+    const code = await run([path.join(d, 'dist')], { out: (t) => (text += t), err: (t) => (text += t) });
+    assert.equal(code, 1, text);
+    assert.match(text, /port \d+ is in use \(another copy of this game may already be running\); pass --port/);
+  } finally { if (listening) await new Promise((r) => blocker.close(r)); }
+});
