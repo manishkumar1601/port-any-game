@@ -111,6 +111,15 @@ test('playwright installs only via runner, with browsers path in cache', async (
   assert.ok(calls[0].args.includes('playwright@9.9.9') && calls[0].args.includes(dir));
   assert.equal(calls[1].b, path.join(process.env.PAG_CACHE, 'ms-playwright'));
   assert.ok(existsSync(path.join(dir, '.ok')));
+  // An explicit PLAYWRIGHT_BROWSERS_PATH wins, as in the driver (I5: CI keeps the browsers in the runner temp).
+  const own = path.join(process.env.PAG_CACHE, 'own-browsers');
+  const l2 = { playwright: { name: 'playwright', version: '9.9.8', special: 'npm' } };
+  const seen = [];
+  const prev = process.env.PLAYWRIGHT_BROWSERS_PATH;
+  process.env.PLAYWRIGHT_BROWSERS_PATH = own;
+  try { await ensureTool('playwright', { lock: l2, run: (cmd, args, env) => seen.push(env.PLAYWRIGHT_BROWSERS_PATH) }); }
+  finally { if (prev === undefined) delete process.env.PLAYWRIGHT_BROWSERS_PATH; else process.env.PLAYWRIGHT_BROWSERS_PATH = prev; }
+  assert.deepEqual(seen, [own, own]);
 });
 
 test('real lock pins are well-formed', () => {

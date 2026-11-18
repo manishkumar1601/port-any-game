@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { CASES, cleanup, keepPort, skipExit, skipReason } from './e2e/run.mjs';
+import { CASES, cleanup, keepPort, parseE2eArgs, skipExit, skipReason } from './e2e/run.mjs';
 
 const tmp = mkdtempSync(path.join(tmpdir(), 'pag-ci-'));
 after(() => { rmSync(tmp, { recursive: true, force: true, maxRetries: 5 }); cleanup(); });
@@ -24,7 +24,16 @@ test('PAG_E2E_REQUIRE_BROWSER=1 turns a missing browser into a failure, only the
 test("the 'all' target holds every lane's cases", () => {
   const lanes = Object.keys(CASES).filter((k) => k !== 'all');
   assert.deepEqual(CASES.all.map((c) => c.name), lanes.flatMap((l) => CASES[l].map((c) => c.name)));
-  assert.equal(CASES.all.length, 7);
+  assert.equal(CASES.all.length, 8);
+});
+
+// I5: the Playwright verify tier runs through the same lane cases.
+test('e2e runner options: --runner cdp|playwright and --headed', () => {
+  assert.deepEqual(parseE2eArgs(['web-extract']), { target: 'web-extract', runner: 'cdp', headed: false });
+  assert.deepEqual(parseE2eArgs(['web-extract', '--runner', 'playwright', '--headed']), { target: 'web-extract', runner: 'playwright', headed: true });
+  assert.throws(() => parseE2eArgs(['web-extract', '--runner', 'firefox']), /runner/);
+  assert.throws(() => parseE2eArgs(['nope']), /usage/);
+  assert.match(String(skipReason({}, 'playwright')), /Playwright is not installed|^false$/);
 });
 
 test('PAG_E2E_KEEP copies the port with its verify/ report; unset keeps nothing', () => {
@@ -61,4 +70,15 @@ test('ci.yml has the agreed shape', () => {
   assert.doesNotMatch(y, /^ {4}env:\n(?: {6}.*\n)*? {6}PAG_E2E_KEEP/m, 'PAG_E2E_KEEP is step-level only');
   assert.match(y, /if: failure\(\)/);
   assert.match(y, /toolchain\.lock\.json/);
+  // I5: one ubuntu job installs Playwright into the runner temp and runs a lane e2e through it under Xvfb.
+  const at = y.indexOf('\n  playwright:\n');
+  assert.ok(at > 0, 'a playwright job');
+  const pw = y.slice(at);
+  assert.match(pw, /^ {4}runs-on: ubuntu-latest$/m);
+  assert.match(pw, /node-version: 22/);
+  assert.match(pw, /PAG_CACHE: \$\{\{ env\.PAG_E2E_TOOLS \}\}$/m);
+  assert.match(pw, /PLAYWRIGHT_BROWSERS_PATH: \$\{\{ env\.PAG_E2E_TOOLS \}\}\/ms-playwright$/m);
+  assert.ok(pw.indexOf('setup playwright --yes') > 0 && pw.indexOf('setup playwright --yes') < pw.indexOf('xvfb-run'), 'setup before the e2e');
+  assert.match(pw, /xvfb-run -a node test\/e2e\/run\.mjs web-extract --runner playwright --headed$/m);
+  assert.match(pw, /PAG_E2E_REQUIRE_BROWSER: '1'/);
 });

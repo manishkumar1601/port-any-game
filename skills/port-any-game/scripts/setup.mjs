@@ -52,7 +52,8 @@ function defaultRun(cmd, args, env) {
 
 async function installPlaywright(e, dir, run) {
   mkdirSync(dir, { recursive: true });
-  const env = { ...process.env, PLAYWRIGHT_BROWSERS_PATH: path.join(cacheDir(), 'ms-playwright') };
+  // The driver reads the same place: an explicit PLAYWRIGHT_BROWSERS_PATH, else <cacheDir>/ms-playwright.
+  const env = { ...process.env, PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH || path.join(cacheDir(), 'ms-playwright') };
   run('npm', ['i', '--prefix', dir, `playwright@${e.version}`, '--no-audit', '--no-fund'], env);
   run('node', [path.join(dir, 'node_modules', 'playwright', 'cli.js'), 'install', 'chromium'], env);
 }

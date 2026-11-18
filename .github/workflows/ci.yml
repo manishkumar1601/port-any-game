@@ -69,3 +69,30 @@ jobs:
           name: verify-${{ matrix.os }}
           path: ${{ env.PAG_KEEP_DIR }}/**/verify/**
           if-no-files-found: ignore
+  # I5: the Playwright verify tier (spec §15: Playwright with SwiftShader + Xvfb on Linux). Playwright and its Chromium
+  # go into the runner's temp dir, never a global or home location.
+  playwright:
+    name: playwright tier (ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Locate the e2e tool cache
+        run: |
+          node -e "const p=require('path'),d=require('os').tmpdir();console.log('PAG_E2E_TOOLS='+p.join(d,'pag-e2e-tools').split(p.sep).join('/'))" >> "$GITHUB_ENV"
+      - name: Setup Playwright (into the e2e tool cache)
+        env:
+          PAG_CACHE: ${{ env.PAG_E2E_TOOLS }}
+          PLAYWRIGHT_BROWSERS_PATH: ${{ env.PAG_E2E_TOOLS }}/ms-playwright
+        run: node skills/port-any-game/scripts/pag.mjs setup playwright --yes
+      - name: Lane e2e through the Playwright runner (Xvfb)
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ env.PAG_E2E_TOOLS }}/ms-playwright
+          PAG_E2E_REQUIRE_BROWSER: '1'
+        run: xvfb-run -a node test/e2e/run.mjs web-extract --runner playwright --headed
