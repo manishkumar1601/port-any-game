@@ -59,14 +59,19 @@ function normaliseEntry(out) {
   return entry;
 }
 
-// Inserts <script src="__pag_hook.js"> as the first child of <head> (creating the position after <html> or the doctype when absent).
+// Inserts <script src="__pag_hook.js"> as the first child of <head> (creating the position after <html> or the doctype when absent,
+// else after a byte-order mark). T16: a Buffer gets the ASCII tag spliced into its own bytes, so a Latin-1 or Shift-JIS page
+// is never re-encoded (latin1 decoding is one char per byte, so match offsets are byte offsets).
 export function injectHook(html, src) {
   const tag = `<script src="${src}"></script>`;
+  const bytes = Buffer.isBuffer(html);
+  const text = bytes ? html.toString('latin1') : html;
+  let at = /^(﻿|\xEF\xBB\xBF)/.exec(text)?.[0].length ?? 0;
   for (const re of [/<head\b[^>]*>/i, /<html\b[^>]*>/i, /<!doctype[^>]*>/i]) {
-    const m = re.exec(html);
-    if (m) return html.slice(0, m.index + m[0].length) + tag + html.slice(m.index + m[0].length);
+    const m = re.exec(text);
+    if (m) { at = m.index + m[0].length; break; }
   }
-  return tag + html;
+  return bytes ? Buffer.concat([html.subarray(0, at), Buffer.from(tag), html.subarray(at)]) : text.slice(0, at) + tag + text.slice(at);
 }
 
 function scanApis(out, files) {
@@ -128,7 +133,7 @@ export default {
       const hookSrc = path.posix.relative(path.posix.dirname(entry), '__pag_hook.js');
       copyFileSync(HOOK, path.join(tmp, '__pag_hook.js'));
       const ep = path.join(tmp, ...entry.split('/'));
-      writeFileSync(ep, injectHook(readFileSync(ep, 'utf8'), hookSrc));
+      writeFileSync(ep, injectHook(readFileSync(ep), hookSrc)); // T16: bytes in, bytes out
       files = listFiles(tmp);
       nodeApiUses = scanApis(tmp, files);
       caseFixes = countCaseFixes(tmp, files);

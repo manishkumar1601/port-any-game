@@ -114,6 +114,20 @@ test('build injects the frame hook first in <head> of the entry, leaving game/ u
   assert.ok(!existsSync(path.join(portDir, 'game', '__pag_hook.js')));
 });
 
+// T16: the entry page keeps its own bytes (a Latin-1 page is not re-encoded as UTF-8); only the ASCII tag is spliced in.
+test('build splices the hook tag into the entry bytes without re-encoding the page', async () => {
+  const install = path.join(dirOf(), 'install');
+  const page = Buffer.from('<html><head><meta charset="iso-8859-1"><title>Caf\xe9</title></head><body>\xe9t\xe9</body></html>', 'latin1');
+  writeTree(install, { 'www/index.html': page, 'nw.dll': '' });
+  const portDir = await portOf(install);
+  await lane.build(portDir);
+  const tag = Buffer.from('<script src="__pag_hook.js"></script>');
+  const at = page.indexOf('<head>') + '<head>'.length;
+  assert.deepEqual(readFileSync(path.join(portDir, 'build', 'game', 'index.html')), Buffer.concat([page.subarray(0, at), tag, page.subarray(at)]));
+  const bom = Buffer.from([0xef, 0xbb, 0xbf]);
+  assert.deepEqual(injectHook(Buffer.concat([bom, Buffer.from('<p>x')]), 'h.js'), Buffer.concat([bom, Buffer.from('<script src="h.js"></script><p>x')]), 'after a BOM');
+});
+
 test('injectHook handles uppercase HEAD, no head, no html', () => {
   const tag = '<script src="h.js"></script>';
   assert.equal(injectHook('<!DOCTYPE html><HTML><HEAD lang=x><title>t</title></HEAD>', 'h.js'), `<!DOCTYPE html><HTML><HEAD lang=x>${tag}<title>t</title></HEAD>`);

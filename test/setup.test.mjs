@@ -135,3 +135,19 @@ test('real lock entries carry license and source for pack notices', () => {
     assert.equal(l[n].archive, 'tgz');
   }
 });
+
+// T10: a stalled download must not hang the agent's tool call: no bytes for stallMs aborts it with a clear message.
+test('a stalled download is aborted with a clear message, before or after the headers', async () => {
+  const stall = http.createServer((req, res) => {
+    if (req.url.startsWith('/body')) { res.writeHead(200, { 'content-length': 1000 }); res.write(Buffer.alloc(10)); } // then nothing
+  }); // /head: never answers
+  await new Promise((r) => stall.listen(0, '127.0.0.1', r));
+  try {
+    for (const p of ['/head.zip', '/body.zip']) {
+      const l = { 'ruffle-selfhosted': { name: 'ruffle-selfhosted', version: `stall${p.length}${p[1]}`, url: `http://127.0.0.1:${stall.address().port}${p}`, sha256: '0'.repeat(64), size: 1000, archive: 'zip' } };
+      const t0 = Date.now();
+      await assert.rejects(ensureTool('ruffle', { lock: l, stallMs: 300 }), /stalled: no data for 0\.3 s .*run the same pag setup command again/, p);
+      assert.ok(Date.now() - t0 < 5000, p);
+    }
+  } finally { stall.closeAllConnections(); stall.close(); }
+});

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { doctor, findBrowsers, detectSandbox } from '../skills/port-any-game/scripts/doctor.mjs';
+import { browserCandidates, doctor, findBrowsers, detectSandbox } from '../skills/port-any-game/scripts/doctor.mjs';
 
 const base = mkdtempSync(path.join(tmpdir(), 'pag-doctor-'));
 after(() => rmSync(base, { recursive: true, force: true }));
@@ -36,4 +36,10 @@ test('detectSandbox reads env markers', () => {
   assert.equal(detectSandbox({}), null);
   assert.equal(detectSandbox({ CLAUDE_CODE_REMOTE: 'true' }), 'claude-web');
   assert.equal(detectSandbox({ CODEX_SANDBOX: '1' }), 'codex-cloud');
+});
+
+// T10: Edge's Linux package installs microsoft-edge-stable.
+test('Linux browser candidates include microsoft-edge-stable', () => {
+  const names = browserCandidates('linux', { PATH: '/usr/bin' }).map((p) => path.basename(p));
+  for (const n of ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'microsoft-edge', 'microsoft-edge-stable']) assert.ok(names.includes(n), n);
 });

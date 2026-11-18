@@ -27,6 +27,8 @@ export async function run(argv, io = {}) {
   // --note-env: the shell never parses the words (Windows PowerShell 5.1 drops `"` inside native-command arguments).
   const envVar = args.values['note-env'];
   if (envVar !== undefined) {
+    // T21: port.json is tracked in git; only our own PAG_* variables can be copied into it, never a secret like a token.
+    if (!/^PAG_[A-Z0-9_]+$/.test(envVar)) { io.err(`pag ack: --note-env takes a PAG_* variable name (for example PAG_NOTE), not '${envVar}'\n`); return 2; }
     note = process.env[envVar];
     if (note === undefined) { io.err(`pag ack: environment variable ${envVar} is not set\n`); return 2; }
   }

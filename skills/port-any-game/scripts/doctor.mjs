@@ -7,9 +7,8 @@ import { cacheDir } from './lib/fsx.mjs';
 
 const kindOf = (p) => (/edge/i.test(p) ? 'edge' : /chromium/i.test(p) ? 'chromium' : 'chrome');
 
-function candidates() {
-  const e = process.env;
-  if (process.platform === 'win32') {
+export function browserCandidates(platform = process.platform, e = process.env) {
+  if (platform === 'win32') {
     const pf = [e.ProgramFiles, e['ProgramFiles(x86)']].filter(Boolean);
     return [
       ...pf.map((d) => path.join(d, 'Microsoft', 'Edge', 'Application', 'msedge.exe')),
@@ -17,17 +16,17 @@ function candidates() {
       ...(e.LOCALAPPDATA ? [path.join(e.LOCALAPPDATA, 'Google', 'Chrome', 'Application', 'chrome.exe')] : []),
     ];
   }
-  if (process.platform === 'darwin') {
+  if (platform === 'darwin') {
     return ['Google Chrome', 'Microsoft Edge', 'Chromium'].map((n) => `/Applications/${n}.app/Contents/MacOS/${n}`);
   }
   const dirs = (e.PATH ?? '').split(path.delimiter).filter(Boolean);
-  return ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'microsoft-edge']
+  return ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'microsoft-edge', 'microsoft-edge-stable']
     .flatMap((n) => dirs.map((d) => path.join(d, n)));
 }
 
 // Ordered: PAG_BROWSER, CHROME_PATH, then per-OS install locations. Existing files only, de-duplicated.
 export function findBrowsers() {
-  const list = [process.env.PAG_BROWSER, process.env.CHROME_PATH, ...candidates()].filter(Boolean);
+  const list = [process.env.PAG_BROWSER, process.env.CHROME_PATH, ...browserCandidates()].filter(Boolean);
   const seen = new Set();
   const out = [];
   for (const p of list) {

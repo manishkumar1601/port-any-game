@@ -26,15 +26,27 @@ const sha256File = (f) => new Promise((res, rej) => {
   createReadStream(f).on('data', (c) => h.update(c)).on('error', rej).on('end', () => res(h.digest('hex')));
 });
 
-async function download(e, part) {
+// T10: no bytes for stallMs (before or after the headers) aborts the download; the .part file stays for a resume.
+async function download(e, part, stallMs = 60000) {
   mkdirSync(path.dirname(part), { recursive: true });
   let have = existsSync(part) ? statSync(part).size : 0;
   if (have > e.size) { rmSync(part); have = 0; }
   if (have === e.size) return;
-  const res = await fetch(e.url, { headers: have ? { Range: `bytes=${have}-` } : {}, redirect: 'follow' });
-  if (!res.ok) throw new Error(`download failed: HTTP ${res.status} for ${e.url}`);
-  const resumed = res.status === 206; // 200 = server ignored Range: rewrite from scratch
-  await pipeline(Readable.fromWeb(res.body), createWriteStream(part, { flags: resumed ? 'a' : 'w' }));
+  const ac = new AbortController();
+  const stalled = Object.assign(new Error(`download stalled: no data for ${stallMs / 1000} s from ${e.url}. Check the internet connection, then run the same pag setup command again (it resumes).`), { code: 'ETIMEDOUT' });
+  let timer;
+  const arm = () => { clearTimeout(timer); timer = setTimeout(() => ac.abort(stalled), stallMs); };
+  arm();
+  try {
+    const res = await fetch(e.url, { headers: have ? { Range: `bytes=${have}-` } : {}, redirect: 'follow', signal: ac.signal });
+    if (!res.ok) throw new Error(`download failed: HTTP ${res.status} for ${e.url}`);
+    const resumed = res.status === 206; // 200 = server ignored Range: rewrite from scratch
+    const body = Readable.fromWeb(res.body);
+    body.on('data', arm);
+    await pipeline(body, createWriteStream(part, { flags: resumed ? 'a' : 'w' }));
+  } catch (err) {
+    throw ac.signal.aborted ? stalled : err;
+  } finally { clearTimeout(timer); }
 }
 
 // Default runner: node + npm-cli.js beside the running node when present (no shell needed on Windows).
@@ -59,7 +71,7 @@ async function installPlaywright(e, dir, run) {
 }
 
 // Returns <cacheDir>/tools/<name>-<version>/. No-op when .ok exists.
-export async function ensureTool(name, { lock = loadLock(), run = defaultRun } = {}) {
+export async function ensureTool(name, { lock = loadLock(), run = defaultRun, stallMs } = {}) {
   const e = lock[resolveName(name)];
   if (!e) throw new Error(`unknown tool '${name}' (known: ${Object.keys(lock).join(', ')})`);
   const dir = toolDir(e);
@@ -73,7 +85,7 @@ export async function ensureTool(name, { lock = loadLock(), run = defaultRun } =
   }
 
   const part = path.join(cacheDir(), 'downloads', `${e.name}-${e.version}.${e.archive}.part`);
-  await download(e, part);
+  await download(e, part, stallMs);
   const got = await sha256File(part);
   if (got !== e.sha256) {
     rmSync(part, { force: true }); // bad bytes must not be resumed

@@ -109,6 +109,20 @@ test('--note-env reads the note verbatim from that variable; a missing one exits
   assert.deepEqual(acks(d2), []);
 });
 
+// T21: port.json is tracked in git, so --note-env must not be able to copy a secret variable into it.
+test('--note-env accepts only PAG_* variable names', async () => {
+  const d = port();
+  process.env.GITHUB_TOKEN_PAG_TEST = 'secret';
+  try {
+    for (const v of ['GITHUB_TOKEN_PAG_TEST', 'PATH', 'pag_note', 'PAG_']) {
+      const r = await ack(['ACK_PRIVATE_USE_ONLY', d, '--note-env', v]);
+      assert.equal(r.code, 2, v);
+      assert.match(r.err, /PAG_/, v);
+    }
+  } finally { delete process.env.GITHUB_TOKEN_PAG_TEST; }
+  assert.deepEqual(acks(d), []);
+});
+
 test('a malformed acks field is an error, never silently replaced', async () => {
   const d = port();
   const bad = `${JSON.stringify({ schema: 'port-any-game/port@1', id: 'g', acks: { id: 'ACK_PRIVATE_USE_ONLY' } })}\n`;
