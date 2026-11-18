@@ -57,9 +57,32 @@ export function gameFiles() {
   };
 }
 
+const WEBGL_TIMER_HTML = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>webgl-timer fixture</title><style>html,body{margin:0;background:#000}canvas{display:block}</style></head>
+<body><canvas id="c" width="640" height="480"></canvas>
+<script>
+const gl = document.getElementById('c').getContext('webgl');
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1]), gl.STATIC_DRAW);
+let n = 0;
+setInterval(() => {
+  n++;
+  gl.disable(gl.SCISSOR_TEST);
+  gl.clearColor(0.3 + (n % 50) / 80, 0.3 + (n % 30) / 50, 0.3 + (n % 70) / 100, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.enable(gl.SCISSOR_TEST);
+  gl.scissor(100 + (n % 200), 100, 200, 150);
+  gl.clearColor(1, 1, 0.2, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.drawArrays(gl.TRIANGLES, 0, 0);
+}, 16);
+</script></body></html>
+`;
+
 const put = (file, data) => { mkdirSync(path.dirname(file), { recursive: true }); writeFileSync(file, data); };
 
-// variant: 'nwjs' | 'electron' | 'nwjs-redirect' (package.json main is start.html; there is no index.html). Returns dir.
+// variant: 'nwjs' | 'electron' | 'webgl-timer' (never calls rAF; draws on setInterval) | 'nwjs-redirect' (package.json main is start.html; there is no index.html). Returns dir.
 export function makeWebGame(dir, variant = 'nwjs') {
   const files = gameFiles();
   if (variant === 'nwjs-redirect') {
@@ -67,7 +90,11 @@ export function makeWebGame(dir, variant = 'nwjs') {
     files['start.html'] = files['index.html'];
     delete files['index.html'];
   }
-  if (variant === 'nwjs' || variant === 'nwjs-redirect') {
+  if (variant === 'webgl-timer') {
+    files['index.html'] = WEBGL_TIMER_HTML;
+    delete files['game.js'];
+  }
+  if (variant === 'nwjs' || variant === 'webgl-timer' || variant === 'nwjs-redirect') {
     put(path.join(dir, 'package.nw'), makeZip(files));
     put(path.join(dir, 'nw.dll'), '');
   } else if (variant === 'electron') {

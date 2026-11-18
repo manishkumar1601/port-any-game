@@ -24,7 +24,7 @@ test('PAG_E2E_REQUIRE_BROWSER=1 turns a missing browser into a failure, only the
 test("the 'all' target holds every lane's cases", () => {
   const lanes = Object.keys(CASES).filter((k) => k !== 'all');
   assert.deepEqual(CASES.all.map((c) => c.name), lanes.flatMap((l) => CASES[l].map((c) => c.name)));
-  assert.equal(CASES.all.length, 8);
+  assert.equal(CASES.all.length, 9);
 });
 
 // I5: the Playwright verify tier runs through the same lane cases.

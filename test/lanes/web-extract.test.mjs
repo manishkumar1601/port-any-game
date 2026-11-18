@@ -13,7 +13,7 @@ const { LANES } = await import('../../skills/port-any-game/scripts/lanes/index.m
 const { extractZip } = await import('../../skills/port-any-game/scripts/lib/archive.mjs');
 const { makeWebGame, makeZip, gameFiles } = await import('../fixtures/make-web-game.mjs');
 const { makePE } = await import('../fixtures/make-pe.mjs');
-const { injectHook } = await import('../../skills/port-any-game/scripts/lanes/web-extract.mjs');
+const { injectHook, finishWebBuild } = await import('../../skills/port-any-game/scripts/lanes/web-extract.mjs');
 const lane = LANES['web-extract'];
 const ASSETS = new URL('../../skills/port-any-game/assets/lanes/web-extract/', import.meta.url);
 
@@ -340,3 +340,25 @@ test('shell() carries the R36 values', () => {
 
 const skip = skipReason();
 for (const c of CASES['web-extract']) test(c.name, { skip, timeout: 240000 }, c.run);
+
+test('finishWebBuild injects the hook and swaps in', () => {
+  const d = dirOf(), t = path.join(d, 'tmp'), out = path.join(d, 'out');
+  mkdirSync(t, { recursive: true });
+  mkdirSync(out, { recursive: true });
+  writeFileSync(path.join(out, 'old.txt'), 'x');
+  writeFileSync(path.join(t, 'index.html'), '<!doctype html><html><head><title>t</title></head><body></body></html>');
+  assert.deepEqual(finishWebBuild(t, out), { entry: 'index.html' });
+  assert.ok(readFileSync(path.join(out, 'index.html'), 'utf8').includes('<head><script src="__pag_hook.js"></script>'));
+  assert.ok(existsSync(path.join(out, '__pag_hook.js')));
+  assert.ok(!existsSync(t));
+  assert.ok(!existsSync(path.join(out, 'old.txt')));
+});
+
+test('finishWebBuild leaves out untouched on failure', () => {
+  const d = dirOf(), t = path.join(d, 'tmp'), out = path.join(d, 'out');
+  mkdirSync(t, { recursive: true });
+  mkdirSync(out, { recursive: true });
+  writeFileSync(path.join(out, 'marker'), 'x');
+  assert.throws(() => finishWebBuild(t, out), /no entry HTML found/);
+  assert.ok(existsSync(path.join(out, 'marker')));
+});

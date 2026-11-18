@@ -277,6 +277,7 @@ const LANE_CASES = {
     { name: 'web-extract NW.js fixture passes verify', run: () => passes('nwjs') },
     { name: 'web-extract Electron fixture passes verify', run: () => passes('electron') },
     { name: 'web-extract fixture with mixed-case refs passes', run: mixedCase },
+    { name: 'web-extract timer-driven WebGL page reports frames', run: () => passes('webgl-timer') },
     { name: 'web-extract redirected main (start.html) passes verify incl. input', run: redirected },
   ],
   'rt-ruffle': [

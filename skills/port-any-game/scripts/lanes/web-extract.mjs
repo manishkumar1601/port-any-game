@@ -74,6 +74,18 @@ export function injectHook(html, src) {
   return bytes ? Buffer.concat([html.subarray(0, at), Buffer.from(tag), html.subarray(at)]) : text.slice(0, at) + tag + text.slice(at);
 }
 
+// Shared by web lanes: normalises the entry, injects the frame hook, then swaps tmp in as out (out is untouched when tmp has no entry).
+export function finishWebBuild(tmp, out) {
+  const entry = normaliseEntry(tmp);
+  const hookSrc = path.posix.relative(path.posix.dirname(entry), '__pag_hook.js');
+  copyFileSync(HOOK, path.join(tmp, '__pag_hook.js'));
+  const ep = path.join(tmp, ...entry.split('/'));
+  writeFileSync(ep, injectHook(readFileSync(ep), hookSrc)); // T16: bytes in, bytes out
+  rmSync(out, { recursive: true, force: true, maxRetries: 2 });
+  renameSync(tmp, out);
+  return { entry };
+}
+
 function scanApis(out, files) {
   const uses = [];
   for (const f of files.filter((n) => /\.js$/i.test(n) && !/(^|\/)node_modules\//.test(n))) {
@@ -129,17 +141,13 @@ export default {
     let files, nodeApiUses, caseFixes;
     try {
       await extract(dir, path.join(dir, 'game'), tmp);
-      const entry = normaliseEntry(tmp);
-      const hookSrc = path.posix.relative(path.posix.dirname(entry), '__pag_hook.js');
-      copyFileSync(HOOK, path.join(tmp, '__pag_hook.js'));
-      const ep = path.join(tmp, ...entry.split('/'));
-      writeFileSync(ep, injectHook(readFileSync(ep), hookSrc)); // T16: bytes in, bytes out
-      files = listFiles(tmp);
-      nodeApiUses = scanApis(tmp, files);
-      caseFixes = countCaseFixes(tmp, files);
-      renameSync(tmp, out);
+      finishWebBuild(tmp, out);
+      files = listFiles(out);
+      nodeApiUses = scanApis(out, files);
+      caseFixes = countCaseFixes(out, files);
     } catch (e) {
       rmSync(tmp, { recursive: true, force: true, maxRetries: 2 });
+      rmSync(out, { recursive: true, force: true, maxRetries: 2 });
       throw e;
     }
     const verdict = nodeApiUses.length ? 'HARD' : 'GO';

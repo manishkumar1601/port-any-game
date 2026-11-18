@@ -190,7 +190,7 @@ Notes:
 
 - `frozen` and `blank` sample only the largest visible canvas. A canvas inside a same-origin iframe or an open shadow
   root (Ruffle draws inside one) is found; a closed shadow root or a cross-origin frame is not.
-- `fps` for web-extract games counts frames reported by the injected hook; for Ruffle, rendered frames only (R46).
+- `fps` for web-extract games counts frames reported by the injected hook (rAF frames, else one per task with a WebGL draw call); for Ruffle, rendered frames only (R46).
 - The instrument forces `preserveDrawingBuffer` on WebGL contexts so sampling and headless screenshots are not black.
 
 ## Reports and exit codes
