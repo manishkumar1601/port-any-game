@@ -6,7 +6,7 @@ permissions:
   - { action: "*", resource: "*", effect: "deny" }
   - { action: "read", resource: "*", effect: "allow" }
   - { action: "external_directory", resource: "*", effect: "ask" }
-  - { action: "shell", resource: "node *pag.mjs verify*", effect: "allow" }
+  - { action: "shell", resource: "node *pag.mjs* verify*", effect: "allow" }
 ---
 You check a port-any-game browser build. You report problems; you never fix them.
 

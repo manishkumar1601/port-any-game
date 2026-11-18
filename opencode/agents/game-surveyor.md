@@ -8,8 +8,8 @@ permissions:
   - { action: "glob", resource: "*", effect: "allow" }
   - { action: "grep", resource: "*", effect: "allow" }
   - { action: "external_directory", resource: "*", effect: "ask" }
-  - { action: "shell", resource: "node *pag.mjs doctor*", effect: "allow" }
-  - { action: "shell", resource: "node *pag.mjs survey*", effect: "allow" }
+  - { action: "shell", resource: "node *pag.mjs* doctor*", effect: "allow" }
+  - { action: "shell", resource: "node *pag.mjs* survey*", effect: "allow" }
 ---
 You survey a PC game folder for the port-any-game skill. You are read-only.
 

@@ -1,12 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import plugin from '../opencode/plugin/index.js';
 
 const PLUGIN = fileURLToPath(new URL('../opencode/plugin/index.js', import.meta.url));
+const SKILL = fileURLToPath(new URL('../skills/port-any-game', import.meta.url));
 
 // Mock v2 ctx: permission.hook records each handler by name (spike c's mock).
 function v2() {
@@ -36,15 +37,26 @@ test('opencode v1 hook throws on steamless', async () => {
   await before({ tool: 'read' }, { args: { filePath: 'steamless.exe' } });
 });
 
-test('opencode plugin fails open when the policy cannot load', async () => {
+// The plugin folder alone (as `opencode plugin add github:…::path:opencode/plugin` may install it), under a temp
+// HOME/USERPROFILE/XDG_CONFIG_HOME so the skill lookup never reads the real user's dirs (R5). Returns the loaded plugin.
+async function lonePlugin(fn) {
   const dir = mkdtempSync(path.join(tmpdir(), 'pag-ocplugin-'));
+  const home = path.join(dir, 'home');
+  const saved = Object.fromEntries(['HOME', 'USERPROFILE', 'XDG_CONFIG_HOME'].map((k) => [k, process.env[k]]));
+  Object.assign(process.env, { HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: path.join(dir, 'xdg') });
   try {
-    // The plugin alone, with no skill two levels up: its relative policy import fails.
-    const f = path.join(dir, 'a', 'b', 'index.js');
-    mkdirSync(path.dirname(f), { recursive: true });
-    copyFileSync(PLUGIN, f);
-    writeFileSync(path.join(dir, 'a', 'b', 'package.json'), '{"type":"module"}\n');
-    const { default: lone } = await import(pathToFileURL(f).href);
+    const p = path.join(dir, 'pkg', 'plugin');
+    cpSync(path.dirname(PLUGIN), p, { recursive: true }); // no skill two levels up: the relative import fails
+    await fn({ home, load: async () => (await import(pathToFileURL(path.join(p, 'index.js')).href)).default });
+  } finally {
+    for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('opencode plugin fails open when the policy cannot load', async () => {
+  await lonePlugin(async ({ load }) => {
+    const lone = await load();
     await (await lone.server({}))['tool.execute.before']({ tool: 'bash' }, { args: { command: 'steamless.exe a' } });
     const { hooks, ctx } = v2();
     await lone.setup(ctx);
@@ -52,7 +64,18 @@ test('opencode plugin fails open when the policy cannot load', async () => {
     await hooks.evaluate?.(e);
     assert.equal(e.effect, 'allow');
     await plugin.setup({}); // a host without ctx.permission must not break plugin load either
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  });
+});
+
+test('opencode plugin finds the skill in ~/.agents/skills when it is not next to the plugin (R57)', async () => {
+  await lonePlugin(async ({ home, load }) => {
+    cpSync(SKILL, path.join(home, '.agents', 'skills', 'port-any-game'), { recursive: true });
+    const lone = await load();
+    await assert.rejects((await lone.server({}))['tool.execute.before']({ tool: 'bash' }, { args: { command: 'steamless.exe a' } }), /DRM removal/);
+    const { hooks, ctx } = v2();
+    await lone.setup(ctx);
+    const e = { action: 'shell', resources: ['steamless.exe a'], effect: 'allow' };
+    hooks.evaluate(e);
+    assert.equal(e.effect, 'deny');
+  });
 });

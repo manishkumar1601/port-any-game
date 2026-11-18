@@ -1,7 +1,8 @@
-// Installs port-any-game for agents without a plugin marketplace. It only copies files and prints each copy; it never
-// writes or edits an agent's config file (it prints the lines to merge) and never starts an agent.
+// Installs port-any-game for agents without a plugin marketplace. It only copies its own folders and files (replacing
+// a previous install of them) and prints each step; it never writes or edits an agent's config file (it prints the
+// lines to merge) and never starts an agent.
 // usage: node scripts/install.mjs --host=<opencode|skills> (--global | --project <dir>) [--dry-run]
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -43,10 +44,18 @@ export function run(argv, io = { out: (t) => process.stdout.write(t), err: (t) =
 
   const dry = v['dry-run'];
   const { steps, configDirs } = plan(v.host, v.global, project);
+  // Decide every step before touching anything: a target that is a link or junction (e.g. left by `npx skills add -g`)
+  // is skipped, never written through; an existing target is replaced, so a reinstall leaves an exact copy.
   try {
     for (const s of steps) {
-      io.out(`${dry ? 'would ' : ''}${s.from ? `copy ${s.from} -> ${s.to}` : `write ${s.to}`}\n`);
+      const st = lstatSync(s.to, { throwIfNoEntry: false });
+      s.verb = st?.isSymbolicLink() ? 'skip' : st ? 'replace' : s.from ? 'copy' : 'write';
+    }
+    for (const s of steps) {
+      if (s.verb === 'skip') { io.out(`skip ${s.to}: it is a link (for example from npx skills add); remove it to install a copy here\n`); continue; }
+      io.out(`${dry ? 'would ' : ''}${s.verb} ${s.from ? `${s.from} -> ` : ''}${s.to}\n`);
       if (dry) continue;
+      if (s.verb === 'replace') rmSync(s.to, { recursive: true, force: true });
       mkdirSync(path.dirname(s.to), { recursive: true });
       if (s.from) cpSync(path.join(ROOT, s.from), s.to, { recursive: true });
       else writeFileSync(s.to, s.text);

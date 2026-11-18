@@ -5,7 +5,8 @@ A cross-agent skill and plugin that ports PC games you own to a private browser 
 <!-- install-block -->
 ## Install
 
-You need git and Node.js 20 or newer (`node --version`). The commands are the same on Windows, macOS and Linux.
+You need git and Node.js 20 or newer (`node --version`). The commands work in any shell on Windows, macOS and Linux,
+except the `DISABLE_TELEMETRY=1` prefix, whose PowerShell form is shown where it appears.
 
 **Claude Code**
 
@@ -29,9 +30,9 @@ Codex asks you to review the plugin's hooks before they run: trust them when pro
 DISABLE_TELEMETRY=1 npx skills add manishkumar1601/port-any-game -g -a github-copilot
 ```
 
-In PowerShell, run `$env:DISABLE_TELEMETRY=1` first, then the `npx` command. Without npx, after `git clone`:
-`node port-any-game/scripts/install.mjs --host=skills --global`. The Copilot plugin route, with hooks, comes after it
-has been verified.
+`npx skills` needs Node.js 22.20 or newer. In PowerShell, run `$env:DISABLE_TELEMETRY=1` first, then the `npx` command.
+On Node 20, or without npx, after `git clone`: `node port-any-game/scripts/install.mjs --host=skills --global`.
+The Copilot plugin route, with hooks, comes after it has been verified.
 
 **OpenCode** (installs the skill, subagents, the `/port-game` command and the guard plugin into `~/.config/opencode`)
 
@@ -48,7 +49,8 @@ plugin can also come straight from GitHub, with the skill from the route below:
 opencode plugin add "github:manishkumar1601/port-any-game#v0.1.0::path:opencode/plugin"
 ```
 
-The `v0.1.0` tag is created at release.
+The `v0.1.0` tag is created at release. This GitHub route is unverified until it is checked with a real OpenCode 2.x
+session, so prefer the clone route above.
 
 **Any other agent** (Amp, Cline, Goose, Junie, Zed, Warp and others get the skill only)
 
@@ -56,7 +58,7 @@ The `v0.1.0` tag is created at release.
 DISABLE_TELEMETRY=1 npx skills add manishkumar1601/port-any-game -g -a <agent>
 ```
 
-In PowerShell, run `$env:DISABLE_TELEMETRY=1` first, then the `npx` command. Without npx, after `git clone`:
-`node port-any-game/scripts/install.mjs --host=skills --global` copies the skill to `~/.agents/skills` and
-`~/.claude/skills`.
+`npx skills` needs Node.js 22.20 or newer. In PowerShell, run `$env:DISABLE_TELEMETRY=1` first, then the `npx` command.
+On Node 20, or without npx, after `git clone`: `node port-any-game/scripts/install.mjs --host=skills --global` copies
+the skill to `~/.agents/skills` and `~/.claude/skills`.
 <!-- /install-block -->

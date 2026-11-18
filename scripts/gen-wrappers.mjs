@@ -39,12 +39,12 @@ export function generate(rootDir) {
     out.set(`com.github.copilot/agents/${fm.name}.agent.md`,
       `${head}name: ${fm.name}\ndescription: ${q(fm.description)}\ntools: ${q([...new Set(tools.map((t) => COPILOT[t] ?? t.toLowerCase()))])}\n---\n${body}`);
     // v2 permissions, last match wins: deny everything, then allow the canonical tools; Bash only for the pag commands
-    // the instructions run.
+    // the instructions run. `pag.mjs*` also matches a quoted path (`node "C:\Jo Smith\…\pag.mjs" survey …`).
     const actions = [...new Set(tools.map((t) => OPENCODE[t]).filter(Boolean))];
     const perms = [['*', '*', 'deny'], ...actions.map((a) => [a, '*', 'allow'])];
     if (tools.includes('Read')) perms.push(['external_directory', '*', 'ask']); // the game and port folders sit outside the project
     if (tools.includes('Bash')) {
-      for (const c of [...new Set([...body.matchAll(/\bpag\.mjs ([a-z][\w-]*)/g)].map((m) => m[1]))].sort()) perms.push(['shell', `node *pag.mjs ${c}*`, 'allow']);
+      for (const c of [...new Set([...body.matchAll(/\bpag\.mjs ([a-z][\w-]*)/g)].map((m) => m[1]))].sort()) perms.push(['shell', `node *pag.mjs* ${c}*`, 'allow']);
     }
     out.set(`opencode/agents/${fm.name}.md`,
       `${head}description: ${q(fm.description)}\nmode: subagent\npermissions:\n${perms.map(([a, r, e]) => `  - { action: ${q(a)}, resource: ${q(r)}, effect: ${q(e)} }`).join('\n')}\n---\n${body}`);

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -81,8 +81,54 @@ test('install --host=skills resolves ~ to USERPROFILE on Windows and HOME elsewh
   }
 });
 
-test('the opencode shim resolves the plugin and its policy import in the installed layout', async () => {
+test('reinstall says replace and leaves an exact copy', () => {
   const s = sandbox();
+  try {
+    assert.match(s.run('--host=skills', '--project', s.project).stdout, /^copy /m);
+    const skill = path.join(s.project, '.agents', 'skills', 'port-any-game');
+    writeFileSync(path.join(skill, 'stale.txt'), 'from an older version\n');
+    const r = s.run('--host=skills', '--project', s.project);
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /^replace skills\/port-any-game -> /m);
+    assert.doesNotMatch(r.stdout, /^copy /m);
+    assert.ok(!existsSync(path.join(skill, 'stale.txt')));
+    assert.ok(existsSync(path.join(skill, 'SKILL.md')));
+  } finally {
+    s.done();
+  }
+});
+
+test('install skips a target that is a link, before copying anything', () => {
+  const s = sandbox();
+  try {
+    // `npx skills add -g` can leave ~/.claude/skills/<name> as a link to ~/.agents/skills/<name>.
+    const elsewhere = path.join(s.decoy, 'linked');
+    mkdirSync(elsewhere);
+    writeFileSync(path.join(elsewhere, 'mine.txt'), 'x');
+    const link = path.join(s.home, '.claude', 'skills', 'port-any-game');
+    mkdirSync(path.dirname(link), { recursive: true });
+    symlinkSync(elsewhere, link, WIN ? 'junction' : 'dir');
+    const r = s.run('--host=skills', '--global');
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(r.stdout.includes(`skip ${link}`), r.stdout);
+    assert.ok(existsSync(path.join(s.home, '.agents', 'skills', 'port-any-game', 'SKILL.md')));
+    assert.ok(lstatSync(link).isSymbolicLink());
+    assert.deepEqual(readdirSync(elsewhere), ['mine.txt']);
+  } finally {
+    s.done();
+  }
+});
+
+// The shim is a plain `.js` with ESM syntax (spike c observed only top-level `.js` files being loaded). OpenCode runs it
+// in Bun; Node loads an untyped ESM `.js` only with syntax detection (Node >= 20.19 / 22.7).
+const [MAJOR, MINOR] = process.versions.node.split('.').map(Number);
+const DETECTS_ESM = MAJOR > 22 || (MAJOR === 22 && MINOR >= 7) || (MAJOR === 20 && MINOR >= 19);
+
+test('the opencode shim resolves the plugin and its policy import in the installed layout', { skip: !DETECTS_ESM && 'this Node cannot load an untyped ESM .js shim (OpenCode/Bun can)' }, async () => {
+  const s = sandbox();
+  // The plugin's fallback skill lookup reads HOME/USERPROFILE/XDG in this process: point them at the sandbox too (R5).
+  const saved = Object.fromEntries(['HOME', 'USERPROFILE', 'XDG_CONFIG_HOME'].map((k) => [k, process.env[k]]));
+  Object.assign(process.env, { HOME: s.home, USERPROFILE: s.home, XDG_CONFIG_HOME: s.xdg });
   try {
     for (const [args, base] of [[['--project', s.project], path.join(s.project, '.opencode')], [['--global'], path.join(s.xdg, 'opencode')]]) {
       const r = s.run('--host=opencode', ...args);
@@ -96,6 +142,7 @@ test('the opencode shim resolves the plugin and its policy import in the install
     assert.ok(!existsSync(path.join(s.project, 'opencode.jsonc')), 'install never writes agent config');
     assert.ok(!existsSync(path.join(s.xdg, 'opencode', 'opencode.jsonc')), 'install never writes agent config');
   } finally {
+    for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
     s.done();
   }
 });

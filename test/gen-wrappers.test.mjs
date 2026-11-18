@@ -12,7 +12,8 @@ const GEN = path.join(ROOT, 'scripts', 'gen-wrappers.mjs');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
 const fixture = (n) => read(`test/fixtures/hook-payloads/${n}.json`);
 const body = (md) => md.slice(md.indexOf('\n---\n', 4) + 5);
-const perms = (md) => [...md.matchAll(/^ {2}- \{ action: "([^"]+)", resource: "([^"]+)", effect: "(\w+)" \}$/gm)].map((m) => m.slice(1).join(' '));
+const rules = (md) => [...md.matchAll(/^ {2}- \{ action: "([^"]+)", resource: "([^"]+)", effect: "(\w+)" \}$/gm)].map((m) => m.slice(1));
+const perms = (md) => rules(md).map((r) => r.join(' '));
 
 test('build generates copilot and opencode agents', () => {
   const out = generate(ROOT);
@@ -34,12 +35,34 @@ test('build generates copilot and opencode agents', () => {
   // v2 permissions: deny everything first (last match wins), then only the canonical tools and the pag commands the body runs.
   assert.deepEqual(perms(out.get('opencode/agents/game-surveyor.md')), [
     '* * deny', 'read * allow', 'glob * allow', 'grep * allow', 'external_directory * ask',
-    'shell node *pag.mjs doctor* allow', 'shell node *pag.mjs survey* allow',
+    'shell node *pag.mjs* doctor* allow', 'shell node *pag.mjs* survey* allow',
   ]);
   assert.deepEqual(perms(out.get('opencode/agents/port-verifier.md')), [
-    '* * deny', 'read * allow', 'external_directory * ask', 'shell node *pag.mjs verify* allow',
+    '* * deny', 'read * allow', 'external_directory * ask', 'shell node *pag.mjs* verify* allow',
   ]);
   assert.match(out.get('opencode/commands/port-game.md'), /^@port-any-game Port the game in: \$ARGUMENTS$/m);
+});
+
+// OpenCode-style wildcard (`*` = any text, whole-string match) and v2 evaluation: the last matching rule wins.
+const glob = (p) => new RegExp(`^${p.split('*').map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`, 's');
+function shellEffect(md, cmd) {
+  let effect;
+  for (const [action, resource, e] of rules(md)) if ((action === '*' || action === 'shell') && glob(resource).test(cmd)) effect = e;
+  return effect;
+}
+
+test('opencode subagents may run their own pag commands, also with quoted paths that contain spaces', () => {
+  const out = generate(ROOT);
+  const surveyor = out.get('opencode/agents/game-surveyor.md');
+  const verifier = out.get('opencode/agents/port-verifier.md');
+  const pag = (...a) => ['node', '"C:\\Users\\Jo Smith\\.agents\\skills\\port-any-game\\scripts\\pag.mjs"', ...a].join(' ');
+  assert.equal(shellEffect(surveyor, pag('survey', '"D:\\My Games\\Doom"')), 'allow');
+  assert.equal(shellEffect(surveyor, pag('doctor', '--json')), 'allow');
+  assert.equal(shellEffect(surveyor, 'node /home/jo/.agents/skills/port-any-game/scripts/pag.mjs survey /games/doom --json'), 'allow');
+  assert.equal(shellEffect(surveyor, pag('new', '"D:\\g"', '"D:\\p"')), 'deny');
+  assert.equal(shellEffect(surveyor, 'rm -rf /'), 'deny');
+  assert.equal(shellEffect(verifier, pag('verify', '"D:\\My Port\\dist"', '--soak', '120')), 'allow');
+  assert.equal(shellEffect(verifier, pag('survey', '"D:\\g"')), 'deny');
 });
 
 test('build --check passes on the committed files', () => {
@@ -101,9 +124,12 @@ test('codex hook commands follow spike b and deny in their shell', () => {
   const { command, commandWindows } = pre.hooks[0];
   assert.ok(command.endsWith('guard --host=codex'), command);
   assert.ok(commandWindows.endsWith('guard --host=codex; exit $LASTEXITCODE'), commandWindows);
-  const r = shell(command, commandWindows, fixture('codex-pretooluse'), withRoot); // Codex denies with JSON at exit 0
-  assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /"permissionDecision":"deny"/);
+  // Codex sets PLUGIN_ROOT and CLAUDE_PLUGIN_ROOT (documented); both forms fall back to the latter. Deny = JSON at exit 0.
+  for (const env of [withRoot, { ...noRoot, CLAUDE_PLUGIN_ROOT: ROOT }]) {
+    const r = shell(command, commandWindows, fixture('codex-pretooluse'), env);
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /"permissionDecision":"deny"/);
+  }
   assert.match(codex.SessionStart[0].hooks[0].command, /status --host=codex$/);
   assert.match(codex.SessionStart[0].hooks[0].commandWindows, /status --host=codex; exit \$LASTEXITCODE$/);
 });
