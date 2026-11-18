@@ -307,8 +307,8 @@ export async function verify(distDir, { runner = 'auto', soakSec = 60, headed = 
   let manifest;
   try {
     shell = readJson(path.join(dist, 'shell.json'));
-    manifest = readJson(path.join(dist, 'game', 'manifest.json'));
-  } catch (e) { throw new Error(`${dist} is not a packed build (${e.code === 'ENOENT' ? 'no shell.json or game/manifest.json' : e.message}); run pag pack first`); }
+    manifest = readJson(path.join(dist, ...String(shell.data?.manifest ?? 'pag-manifest.json').split('/')));
+  } catch (e) { throw new Error(`${dist} is not a packed build (${e.code === 'ENOENT' ? 'no shell.json or pag-manifest.json' : e.message}); run pag pack first`); }
   const { dir: port, port: portJson } = portOf(dist);
   const out = path.join(port ?? path.dirname(dist), 'verify');
   mkdirSync(out, { recursive: true });

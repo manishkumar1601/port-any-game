@@ -5,7 +5,7 @@
 - `index.html` and `shell/`: the player page (Play button, progress, plain error messages). MIT.
 - `shell.json`: the lane's settings. `runtime/<lane>-<hash>/`: the lane's player (Ruffle, js-dos, or the small
   web-extract adapter).
-- `game/manifest.json`: every game file with its size and hash. `game/...`: the game files, in bundled builds only.
+- `pag-manifest.json`: every game file with its size and hash. `game/...`: the game files, in bundled builds only.
 - `_headers` (security headers), `robots.txt` (no search indexing), `LICENSES/` (every shipped part's licence).
 
 Data modes:

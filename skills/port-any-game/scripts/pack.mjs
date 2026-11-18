@@ -1,6 +1,6 @@
 // `pag pack [portDir] [--mode byo|bundled|bundled-public]`: assemble <port>/dist (spec §8): the shared shell,
-// runtime/<lane>-<hash8>/ (adapter + pinned runtime files), shell.json, game/manifest.json (+ the game files unless
-// byo), _headers, robots.txt and LICENSES/. Exit 0 ok, 1 failure, 2 usage, 4 policy refusal.
+// runtime/<lane>-<hash8>/ (adapter + pinned runtime files), shell.json, pag-manifest.json (+ the game files in game/
+// unless byo), _headers, robots.txt and LICENSES/. Exit 0 ok, 1 failure, 2 usage, 4 policy refusal.
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -16,6 +16,7 @@ const ASSETS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'as
 const SHELL_DIR = path.join(ASSETS, 'shell');
 const GPL2_TEXT = path.join(ASSETS, 'licenses', 'GPL-2.0.txt');
 const MODES = ['byo', 'bundled', 'bundled-public'];
+const MANIFEST = 'pag-manifest.json'; // M3: outside game/, so a game's own manifest.json (PWA exports) is just a game file
 const JUNK = /^(\.DS_Store|Thumbs\.db|desktop\.ini)$/i; // OS litter differs per copy; never ask the user for it
 const USAGE = 'usage: pag pack [portDir] [--mode byo|bundled|bundled-public]\n';
 const CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'";
@@ -92,7 +93,7 @@ export function headersFor(shell) {
     '  X-Content-Type-Options: nosniff',
     '  Referrer-Policy: no-referrer',
     ...(shell.data?.mode === 'bundled-public' ? [] : ['  X-Robots-Tag: noindex, nofollow']),
-    ...['/index.html', '/shell.json', '/game/manifest.json'].flatMap((p) => [p, '  Cache-Control: no-cache']),
+    ...['/index.html', '/shell.json', `/${MANIFEST}`].flatMap((p) => [p, '  Cache-Control: no-cache']),
     '/runtime/*',
     '  Cache-Control: public, max-age=31536000, immutable',
     '',
@@ -110,7 +111,7 @@ function shellJson(port, lane, mode, runtimeDir, portDir) {
     requires: merged('requires'),
     needs_coi: c.needs_coi ?? c.requires?.threads === true,
     memory: merged('memory'),
-    data: { mode, manifest: 'game/manifest.json', mount: '/game', saves: `/saves/${port.id}` },
+    data: { mode, manifest: MANIFEST, mount: '/game', saves: `/saves/${port.id}` },
     input: merged('input'),
     video: merged('video'),
     ...(c.serve ? { serve: c.serve } : {}),
@@ -203,9 +204,8 @@ function writeDist(out, { port, lane, mode, tool, runtime, files, source, portDi
     total_bytes: entries.reduce((s, f) => s + f.size, 0),
     files: entries,
   };
-  mkdirSync(path.join(out, 'game'));
   if (mode !== 'byo') for (const f of files) copyTo(f.abs, path.join(out, 'game', ...f.path.split('/')));
-  writeFileSync(path.join(out, 'game', 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  writeFileSync(path.join(out, MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`);
 
   const shell = shellJson(port, lane, mode, runtime.dir, portDir);
   writeFileSync(path.join(out, 'shell.json'), `${JSON.stringify(shell, null, 2)}\n`);
@@ -241,8 +241,6 @@ export async function pack(portDir, { mode, laneModule, lock, warn = () => {} } 
   const source = isDir(path.join(dir, 'build', 'game')) ? 'build/game' : 'game';
   if (!isDir(path.join(dir, source))) throw new Error('no game files: the game/ folder is missing (pag new links it to your install)');
   const files = await gameFiles(path.join(dir, ...source.split('/')), warn);
-  const clash = mode !== 'byo' && files.find((f) => f.path.toLowerCase() === 'manifest.json');
-  if (clash) throw new Error(`the game has its own ${clash.path} at the top of ${source}/, which would clash with game/manifest.json`);
 
   // Build beside dist (under the git-ignored work/), then swap it in, so a failure leaves the previous dist whole
   // and a byo pack never keeps game bytes from an earlier bundled one.
@@ -282,7 +280,7 @@ export async function run(argv, io = { out: (t) => process.stdout.write(t), err:
   } catch (e) { io.err(`pag pack: ${e.message}\n${USAGE}`); return 2; }
   try {
     const { distDir, shell } = await pack(args.positionals[0] ?? '.', { ...opts, mode: args.values.mode, warn: (m) => io.err(`pag pack: warning: ${m}\n`) });
-    io.out(`Packed ${distDir} (lane ${shell.lane}, data ${shell.data.mode}).\nNext: pag serve ${distDir}, then pag verify.\n`);
+    io.out(`Packed ${distDir} (lane ${shell.lane}, data ${shell.data.mode}).\nNext: pag verify "${distDir}" --soak 5 (verify serves the build itself).\n`);
     return 0;
   } catch (e) {
     io.err(`pag pack: ${e.message}\n`);

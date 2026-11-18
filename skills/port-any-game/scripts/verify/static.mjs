@@ -28,7 +28,7 @@ export async function staticChecks(dist, shell, manifest, port) {
   for await (const e of walk(dist)) if (!e.truncated && !e.error) files.push(e);
   const problems = [];
   if (shell.data?.mode === 'byo') {
-    const carried = files.filter((e) => e.rel.startsWith('game/') && e.rel !== 'game/manifest.json');
+    const carried = files.filter((e) => e.rel.startsWith('game/'));
     if (carried.length) problems.push(`a byo build must not carry game files, found ${carried.length} (${carried[0].rel})`);
   } else {
     for (const f of manifest.files ?? []) {

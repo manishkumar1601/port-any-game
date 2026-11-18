@@ -1,12 +1,13 @@
 // Lane e2e cases: fixture game -> survey -> newPort -> build -> pack -> verify, through the real pipeline.
-// `node test/e2e/run.mjs <lane>` runs that lane's cases (exit 0 pass or skipped, 1 failure, 2 usage); the lane test
-// files import CASES and run them under node:test. Tasks 17-18 add their lanes to CASES.
+// `node test/e2e/run.mjs <lane> [--runner cdp|playwright] [--headed]` runs that lane's cases (exit 0 pass or skipped, 1
+// failure, 2 usage); the lane test files import CASES and run them under node:test. Tasks 17-18 add their lanes to CASES.
 import assert from 'node:assert/strict';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 
 const SCRIPTS = '../../skills/port-any-game/scripts';
 
@@ -29,11 +30,18 @@ const { makeMZ } = await import('../fixtures/make-pe.mjs');
 const { ensureTool } = await import(`${SCRIPTS}/setup.mjs`);
 const { startServer } = await import(`${SCRIPTS}/serve.mjs`);
 const { openCdp } = await import(`${SCRIPTS}/verify/driver-cdp.mjs`);
+const { openPlaywright } = await import(`${SCRIPTS}/verify/driver-playwright.mjs`);
+const { playwrightEntry } = await import(`${SCRIPTS}/verify/browser.mjs`);
 const { setTimeout: sleep } = await import('node:timers/promises');
 
+// I5: the verify runner for every case. `--runner playwright` (CI: Linux under Xvfb, `--headed`) uses the Playwright
+// installed by `pag setup playwright --yes` into the e2e tool cache.
+const opts = { runner: 'cdp', headed: false };
+
 // PAG_E2E=0 turns every browser e2e case off (CI runs them once, via `npm run e2e`, not again under `npm test`).
-export const skipReason = (env = process.env) => {
+export const skipReason = (env = process.env, runner = opts.runner) => {
   if (env.PAG_E2E === "0") return "PAG_E2E=0; browser e2e skipped";
+  if (runner === 'playwright') return inToolCache(playwrightEntry) ? false : `Playwright is not installed in ${TOOL_CACHE} (PAG_CACHE=<it> pag setup playwright --yes); browser e2e skipped`;
   const b = findBrowser();
   if (!b) return 'no Chrome/Edge found (install one or set PAG_BROWSER); browser e2e skipped';
   if (typeof WebSocket !== 'function') return 'the CDP runner needs Node 22+ (global WebSocket); browser e2e skipped';
@@ -47,6 +55,11 @@ export async function withToolCache(fn) {
   const prev = process.env.PAG_CACHE;
   process.env.PAG_CACHE = TOOL_CACHE;
   try { return await fn(); } finally { process.env.PAG_CACHE = prev; }
+}
+function inToolCache(fn) {
+  const prev = process.env.PAG_CACHE;
+  process.env.PAG_CACHE = TOOL_CACHE;
+  try { return fn(); } finally { process.env.PAG_CACHE = prev; }
 }
 // Only a network/fetch failure skips; a sha mismatch, bad lock entry or extract bug must fail loudly.
 // Matched on error codes and names (the error or its cause), never on words in a message, except fetch's own "fetch failed".
@@ -86,9 +99,10 @@ async function pipelineIn(laneId, fixture, { soakSec, mode, query }) {
   // build and pack look the tool up in PAG_CACHE
   const { built, distDir } = await withToolCache(async () => ({ built: await LANES[laneId].build(portDir), ...(await pack(portDir, { mode })) }));
   const t0 = Date.now();
-  const report = await verify(distDir, { runner: 'cdp', soakSec, query });
+  const report = await withToolCache(() => verify(distDir, { runner: opts.runner, headed: opts.headed, soakSec, query })); // Playwright lives there
   keepPort(portDir, `${laneId}-${path.basename(dir)}`);
   console.log(`# ${laneId}: verify ${report.status} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+  assert.equal(report.runs[0].runner, opts.runner, `verify ran on ${report.runs[0].runner}, not the requested ${opts.runner} runner`);
   return { portDir, distDir, built, survey: s, report };
 }
 
@@ -145,7 +159,7 @@ async function ruffleByo() {
     const b = readFileSync(f);
     assert.equal(b.includes(swf.subarray(0, 64)) || b.includes(swf.subarray(100, 164)), false, `game bytes in dist: ${f}`);
   }
-  assert.deepEqual(readdirSync(path.join(r.distDir, 'game')), ['manifest.json']);
+  assert.equal(existsSync(path.join(r.distDir, 'game')), false, 'a byo dist has no game/ folder');
 }
 
 // Review Focus 5: an import interrupted after one file resumes; files already marked .done are not fetched again.
@@ -191,7 +205,7 @@ async function dosByo() {
     const b = readFileSync(f);
     assert.equal(b.includes(com.subarray(0, 28)) || b.includes(com.subarray(27)), false, `game bytes in dist: ${f}`);
   }
-  assert.deepEqual(readdirSync(path.join(r.distDir, 'game')), ['manifest.json']);
+  assert.equal(existsSync(path.join(r.distDir, 'game')), false, 'a byo dist has no game/ folder');
   const lic = readFileSync(path.join(r.distDir, 'LICENSES', 'js-dos.txt'), 'utf8');
   assert.match(lic, /^js-dos 8\.5\.4\nLicense: GPL-2\.0\nSource: https:\/\/github\.com\/caiiiycuk\/js-dos\n/);
   assert.match(lic, /complete corresponding source code is available at https:\/\/github\.com\/caiiiycuk\/js-dos \(tag\/version 8\.5\.4\)/);
@@ -202,9 +216,10 @@ async function dosByo() {
 // later save keeps the earlier one. Drives the packed build directly (one browser profile, so OPFS survives reloads).
 async function dosSaves() {
   const r = await dosRun();
-  const manifest = JSON.parse(readFileSync(path.join(r.distDir, 'game', 'manifest.json'), 'utf8'));
+  const manifest = JSON.parse(readFileSync(path.join(r.distDir, 'pag-manifest.json'), 'utf8'));
   const srv = await startServer({ root: r.distDir, fixtureDir: path.join(r.portDir, 'game'), fixtureIndex: manifest.files.map((f) => ({ path: f.path, size: f.size })), log: () => {} });
-  const d = await openCdp({ path: findBrowser().path, headless: true });
+  const d = opts.runner === 'playwright' ? await withToolCache(() => openPlaywright({ headless: !opts.headed }))
+    : await openCdp({ path: findBrowser().path, headless: !opts.headed });
   try {
     const ev = (fn, arg) => d.evaluate(fn.toString(), arg);
     const until = async (fn, what) => {
@@ -267,11 +282,22 @@ export const CASES = { ...LANE_CASES, all: Object.values(LANE_CASES).flat() };
 // Exit code when the browser e2e cannot run: a skip is 0, unless CI demands a browser (PAG_E2E_REQUIRE_BROWSER=1) and one is missing.
 export const skipExit = (why, env = process.env) => (why && env.PAG_E2E_REQUIRE_BROWSER === '1' && !/PAG_E2E=0/.test(why) ? 1 : 0);
 
+const USAGE = `usage: node test/e2e/run.mjs <${Object.keys(CASES).join('|')}> [--runner cdp|playwright] [--headed]`;
+export function parseE2eArgs(argv) {
+  const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: { runner: { type: 'string', default: 'cdp' }, headed: { type: 'boolean', default: false } } });
+  if (positionals.length !== 1 || !CASES[positionals[0]]) throw new Error(USAGE);
+  if (!['cdp', 'playwright'].includes(values.runner)) throw new Error(`unknown runner '${values.runner}'\n${USAGE}`);
+  return { target: positionals[0], runner: values.runner, headed: values.headed };
+}
+
 async function main(argv) {
-  const cases = CASES[argv[0]];
-  if (!cases) { console.error(`usage: node test/e2e/run.mjs <${Object.keys(CASES).join('|')}>`); return 2; }
+  let a;
+  try { a = parseE2eArgs(argv); } catch (e) { console.error(e.message); return 2; }
+  Object.assign(opts, { runner: a.runner, headed: a.headed });
+  const cases = CASES[a.target];
   const why = skipReason();
-  if (why) { const code = skipExit(why); console.log(`${code ? 'FAIL' : 'SKIP'} ${argv[0]}: ${why}${code ? ' (PAG_E2E_REQUIRE_BROWSER=1)' : ''}`); return code; }
+  if (why) { const code = skipExit(why); console.log(`${code ? 'FAIL' : 'SKIP'} ${a.target}: ${why}${code ? ' (PAG_E2E_REQUIRE_BROWSER=1)' : ''}`); return code; }
+  console.log(`# runner ${a.runner}${a.headed ? ', headed' : ''}`);
   let failed = 0;
   for (const c of cases) {
     try { await c.run(); console.log(`ok   ${c.name}`); } catch (e) {

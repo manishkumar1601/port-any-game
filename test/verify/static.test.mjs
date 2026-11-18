@@ -25,7 +25,7 @@ async function packed(data, acks = []) {
   const port = { schema: 'port-any-game/port@1', id: `static-${n}`, name: 'Static', lane: 'lane-test', data, tools: {}, acks };
   writeFileSync(path.join(dir, 'port.json'), JSON.stringify(port));
   const { distDir, shell } = await pack(dir, { laneModule });
-  const manifest = JSON.parse(readFileSync(path.join(distDir, 'game', 'manifest.json'), 'utf8'));
+  const manifest = JSON.parse(readFileSync(path.join(distDir, shell.data.manifest), 'utf8'));
   return { distDir, shell, manifest, port };
 }
 const status = (checks, name) => checks.find((c) => c.name === name)?.status;

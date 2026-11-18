@@ -91,7 +91,7 @@ test('pack writes shell, manifest, _headers, robots, LICENSES', async () => {
   assert.equal(shell.game_id, port.id);
   assert.equal(shell.lane, 'lane-test');
   assert.match(shell.entry.adapter, /^runtime\/lane-test-[0-9a-f]{8}\/adapter\.js$/, 'content-hashed runtime folder (R30)');
-  assert.deepEqual(shell.data, { mode: 'byo', manifest: 'game/manifest.json', mount: '/game', saves: `/saves/${port.id}` });
+  assert.deepEqual(shell.data, { mode: 'byo', manifest: 'pag-manifest.json', mount: '/game', saves: `/saves/${port.id}` });
   assert.equal(shell.needs_coi, false);
   assert.deepEqual(shell.verify.inputs, ['ArrowRight']);
   assert.equal(shell.verify.audio_on_title, true);
@@ -108,7 +108,7 @@ test('pack writes shell, manifest, _headers, robots, LICENSES', async () => {
   assert.ok(existsSync(path.join(rt, 'sub', 'runtime.wasm')));
   assert.ok(!existsSync(path.join(rt, '.ok')));
 
-  const m = JSON.parse(readFileSync(d('game/manifest.json'), 'utf8'));
+  const m = JSON.parse(readFileSync(d('pag-manifest.json'), 'utf8'));
   assert.equal(m.source, 'game');
   assert.match(m.version, /^[0-9a-f]{64}$/);
   assert.deepEqual(m.files, Object.keys(game).sort().map((p) => ({ path: p, size: game[p].length, sha256: sha(game[p]) })), 'sorted, OS junk skipped');
@@ -160,7 +160,7 @@ test('byo pack contains no game bytes', async () => {
 
   const { distDir, shell } = await pack(dir, opts()); // re-pack as byo over the bundled dist
   assert.equal(shell.data.mode, 'byo');
-  assert.deepEqual(readdirSync(path.join(distDir, 'game')), ['manifest.json']);
+  assert.equal(existsSync(path.join(distDir, 'game')), false, 'a byo dist has no game/ folder at all');
   const blobs = [...files(distDir)].map((f) => [f, readFileSync(f)]);
   for (const [rel, data] of Object.entries(game)) {
     for (const [f, b] of blobs) assert.ok(!b.includes(data), `${rel} bytes found in ${path.relative(distDir, f)}`);
@@ -251,6 +251,9 @@ test('pack CLI: data mode outside the lane, missing adapter, missing runtime too
   c = io();
   assert.equal(await run([p.dir], c.io, opts()), 0);
   assert.match(c.o.out, /dist/);
+  // M1/R53: verify serves the build itself; pag serve is only for the hand-over.
+  assert.match(c.o.out, /Next: pag verify .*dist.* --soak 5/);
+  assert.doesNotMatch(c.o.out, /pag serve/);
 });
 
 test('headersFor adds COOP/COEP only when needs_coi', () => {
@@ -262,13 +265,13 @@ test('headersFor adds COOP/COEP only when needs_coi', () => {
   for (const h of [plain, coi]) {
     assert.doesNotMatch(h, /credentialless/);
     const rules = Object.fromEntries(parseHeadersFile(h).map((r) => [r.pattern, r.headers]));
-    assert.deepEqual(Object.keys(rules), ['/*', '/index.html', '/shell.json', '/game/manifest.json', '/runtime/*']);
+    assert.deepEqual(Object.keys(rules), ['/*', '/index.html', '/shell.json', '/pag-manifest.json', '/runtime/*']);
     assert.equal(rules['/*']['Cross-Origin-Resource-Policy'], 'same-origin');
     assert.equal(rules['/*']['Content-Security-Policy'], "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'");
     assert.equal(rules['/*']['X-Content-Type-Options'], 'nosniff');
     assert.equal(rules['/*']['Referrer-Policy'], 'no-referrer');
     assert.equal(rules['/*']['X-Robots-Tag'], 'noindex, nofollow');
-    for (const p of ['/index.html', '/shell.json', '/game/manifest.json']) assert.deepEqual(rules[p], { 'Cache-Control': 'no-cache' });
+    for (const p of ['/index.html', '/shell.json', '/pag-manifest.json']) assert.deepEqual(rules[p], { 'Cache-Control': 'no-cache' });
     assert.deepEqual(rules['/runtime/*'], { 'Cache-Control': 'public, max-age=31536000, immutable' });
   }
   assert.equal(headersFor({ requires: { threads: true } }), plain, 'only needs_coi decides');
@@ -302,7 +305,7 @@ test('X-Robots-Tag is for private builds only (none on bundled-public)', async (
 
 test('manifest version changes when a file changes', async () => {
   const { dir } = makePort();
-  const v = async () => JSON.parse(readFileSync(path.join((await pack(dir, opts())).distDir, 'game', 'manifest.json'), 'utf8'));
+  const v = async () => JSON.parse(readFileSync(path.join((await pack(dir, opts())).distDir, 'pag-manifest.json'), 'utf8'));
   const a = await v();
   assert.equal((await v()).version, a.version, 'deterministic');
   const f = path.join(dir, 'game', 'data', 'level1.dat');
@@ -319,16 +322,18 @@ test('a failed pack leaves the previous dist whole and no temp dirs', async () =
   const broken = lane({ shell: () => { throw new Error('lane shell broke'); } });
   await assert.rejects(pack(dir, opts({ laneModule: broken, mode: 'bundled' })), /lane shell broke/);
   assert.equal(readFileSync(path.join(dir, 'dist', 'shell.json'), 'utf8'), before);
-  assert.deepEqual(readdirSync(path.join(dir, 'dist', 'game')), ['manifest.json'], 'no bundled bytes leaked into the kept dist');
+  assert.equal(existsSync(path.join(dir, 'dist', 'game')), false, 'no bundled bytes leaked into the kept dist');
   assert.deepEqual(readdirSync(path.join(dir, 'work')), []);
 });
 
-test('a game manifest.json clashes in any letter case', async () => {
+// M3: pag's own manifest lives outside the game namespace, so a PWA-style game's manifest.json packs as a game file.
+test('a game manifest.json is an ordinary game file', async () => {
   const p = makePort();
-  writeFileSync(path.join(p.dir, 'game', 'MANIFEST.JSON'), '{"name":"pwa"}');
-  await assert.rejects(pack(p.dir, opts({ mode: 'bundled' })), /MANIFEST\.JSON .*clash with game\/manifest\.json/);
-  const m = JSON.parse(readFileSync(path.join((await pack(p.dir, opts())).distDir, 'game', 'manifest.json'), 'utf8'));
-  assert.ok(m.files.some((f) => f.path === 'MANIFEST.JSON'), 'byo copies no game files, so no clash');
+  writeFileSync(path.join(p.dir, 'game', 'manifest.json'), '{"name":"pwa"}');
+  const { distDir, shell } = await pack(p.dir, opts({ mode: 'bundled' }));
+  assert.equal(readFileSync(path.join(distDir, 'game', 'manifest.json'), 'utf8'), '{"name":"pwa"}');
+  const m = JSON.parse(readFileSync(path.join(distDir, shell.data.manifest), 'utf8'));
+  assert.ok(m.files.some((f) => f.path === 'manifest.json'));
 });
 
 test('checkGameNames refuses names the browser cannot use', () => {
@@ -364,7 +369,7 @@ test('links must stay inside the game folder; other non-regular entries are skip
   const warns = [];
   const r = await pack(ok.dir, opts({ mode: 'bundled', warn: (m) => warns.push(m) }));
   assert.match(warns.join('\n'), /alias: linked folder inside the game folder, not followed/);
-  const m = JSON.parse(readFileSync(path.join(r.distDir, 'game', 'manifest.json'), 'utf8'));
+  const m = JSON.parse(readFileSync(path.join(r.distDir, 'pag-manifest.json'), 'utf8'));
   assert.deepEqual(m.files.map((f) => f.path), ['GAME.EXE', 'data/Music.ogg', 'data/level1.dat']);
 
   if (process.platform !== 'win32' && spawnSync('mkfifo', [path.join(ok.src, 'pipe')]).status === 0) {
@@ -386,7 +391,7 @@ test('pack prefers build/game, copies only listed runtime files, needs_coi follo
   writeFileSync(path.join(dir, 'build', 'game', 'index.html'), '<p>built</p>');
   const laneModule = lane({ runtime: { tool: 'fake-rt', files: ['runtime.js'] }, shell: () => ({ requires: { threads: true } }) });
   const { distDir, shell } = await pack(dir, opts({ laneModule, mode: 'bundled' }));
-  const m = JSON.parse(readFileSync(path.join(distDir, 'game', 'manifest.json'), 'utf8'));
+  const m = JSON.parse(readFileSync(path.join(distDir, 'pag-manifest.json'), 'utf8'));
   assert.equal(m.source, 'build/game');
   assert.deepEqual(m.files.map((e) => e.path), ['index.html']);
   assert.equal(readFileSync(path.join(distDir, 'game', 'index.html'), 'utf8'), '<p>built</p>');
