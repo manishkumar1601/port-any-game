@@ -29,11 +29,12 @@ usually minutes.
 | What you see | Cause | Fix |
 |---|---|---|
 | survey or `pag new`: no lane applies, but the folder is a DOS game | the folder has only `.COM` programs, which have no header for the survey to recognise (M1 limit) | If the user confirms it is a DOS game: `node <skill-dir>/scripts/pag.mjs new "<game>" "<port>" --lane dos-jsdos`. Build then starts the largest `.COM`. |
-| build: "the js-dos runtime is not installed; run: pag setup jsdos --yes" | runtime missing | Step 1 (show the size first). |
+| build: "the js-dos runtime is not installed; run: pag setup jsdos --yes" | runtime missing | Do step 1: show the size and ask first. Never run the `--yes` line from the message directly. |
 | build: "no DOS executable" | no MZ/LE/LX program and no `.COM` | Check `<game>` is the installed game, not a disc image. Ask the user to install or copy the disc's files first. |
 | DOS prints "Illegal command" or "Bad command or file name" | DOSBox shows long names as 8.3 names. Build assumes `~1`; when two long names share their first six letters, the real one may be `~2` | Set `exe` in `<port>/build/lane.json` to the right 8.3 name (for example `LONGNA~2.EXE`), then pack again. |
 | the wrong program starts (setup tool, small loader), or the game needs a `.BAT` to start | build picks the largest program | Set `exe` in `<port>/build/lane.json` to the right file (for example `GAME.BAT` or `PLAY.EXE`), then pack again. A new `pag build` resets it. |
 | Ctrl or Alt "do strange things" in the browser | Ctrl and Alt reach the game (fire, strafe), but browser shortcuts still work too: Ctrl+W closes the tab, Ctrl+R reloads | Tell the user. If the game uses Ctrl or Alt with letter keys, suggest changing those keys in the game's own setup. |
+| the mouse does nothing (or a gamepad does nothing) | the M1 DOS lane passes only keyboard input to DOSBox | Tell the user: DOS builds are keyboard only for now. Games that need a mouse cannot be played this way yet. |
 | the game runs too fast or too slow | DOSBox speed is fixed to `cycles=auto` in M1 | Report it; M1 cannot tune the speed. |
 | verify `frozen` fails on a still title screen | the game waits for a key; this lane declares no verify keys in M1 | Look at the screenshot. If the title is drawn correctly, say so and rely on the user's 2-minute check. |
 

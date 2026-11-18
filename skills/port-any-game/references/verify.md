@@ -3,7 +3,7 @@
 ## What `pag verify` does
 It serves `dist/` on 127.0.0.1 and opens the user's own Chrome or Edge with a throwaway profile (nothing is
 installed; it is driven over the Chrome DevTools Protocol). Without Chrome or Edge it uses Playwright's Chromium,
-once `pag setup playwright --yes` has installed it. Then it:
+once the user agreed to install it (`pag setup playwright`, see below). Then it:
 1. checks the build's files, hashes, headers and licences, and refuses public game data without rights;
 2. loads the page; for BYO lanes it imports the game files from `<port>/game` the way a user would;
 3. clicks Play, waits up to 10 s for the game's first frame, then samples the picture for 10 s;
@@ -56,7 +56,7 @@ Always look at the screenshots before you tell the user it works.
 | `fps` warns (or "software rendering") | the machine is busy, or has no graphics acceleration here | Close other heavy apps (games, video calls, big builds, browser tabs with video) and run verify again. A warning that stays on software rendering is the machine's limit, not the port's. |
 | `privacy` fails: "request with a body" (for example a POST) or "cross-origin" | the game or runtime tried to send data or reach another site | The page blocks it; report which feature needs it (ads, scores, online parts). Never loosen the rule. |
 | `frozen` fails on a still title screen | the game waits for a click or a key the lane does not press | Look at the screenshot. If the title is drawn correctly, tell the user and rely on their 2-minute check. |
-| `fixture` fails (BYO) | `<port>/game` is missing or not a folder | Re-link it with `node <skill-dir>/scripts/pag.mjs new "<game>" "<port>" --resume`, or pass `--fixture "<game>"`. |
+| `fixture` fails (BYO) | `<port>/game` is missing or not a folder | Re-link it with `node <skill-dir>/scripts/pag.mjs new "<game>" "<port>" --resume --lane <the port's lane>` (without `--lane` it fails when the survey finds no lane), or pass `--fixture "<game>"`. |
 | `requests` fails with 404s | a file is missing, or its name's case differs (web-extract) | See the lane reference. Always verify and serve through pag. |
 
 ## The user's 2-minute check

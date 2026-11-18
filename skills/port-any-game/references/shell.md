@@ -30,10 +30,19 @@ Data modes:
   "Loading. If this stays, open the build through pag serve".
 
 ## Another device at home
-`node <skill-dir>/scripts/pag.mjs serve "<port>/dist" --lan --password-env PAG_PASSWORD`
-- Ask first. It makes the game reachable from the home network, so `ACK_PRIVATE_USE_ONLY` must be recorded. A
-  password is required: the user sets it in the environment variable named by `--password-env` (here
-  `PAG_PASSWORD`), so it never appears in the command. The browser then asks for it (any user name works).
+- Ask first, with the `ACK_WARN_BEYOND_LOOPBACK` question ([legal](legal.md)), and record the yes with `pag ack`:
+  this makes the game reachable from the home network.
+- A password is required. Ask the user to choose a new one used for nothing else. pag reads it from the environment
+  variable named by `--password-env`, set in the same shell that runs serve:
+  - sh/bash: `PAG_PASSWORD='<password>' node <skill-dir>/scripts/pag.mjs serve "<port>/dist" --lan --password-env PAG_PASSWORD`
+  - PowerShell: `$env:PAG_PASSWORD = '<password>'`, then
+    `node <skill-dir>/scripts/pag.mjs serve "<port>/dist" --lan --password-env PAG_PASSWORD`
+
+  The other device's browser asks for it; any user name works.
+- serve still prints `http://127.0.0.1:<N>`, which only works on this computer. Give the user this computer's home
+  network address instead: `http://<LAN IP>:<N>`. Find the LAN IP with `ipconfig` (Windows, "IPv4 Address"),
+  `ipconfig getifaddr en0` (macOS) or `hostname -I` (Linux). Windows may ask once whether Node.js may use the
+  network: allow it for private networks only.
 - Works for bundled builds (web-extract). Ruffle and DOS builds do not work this way in M1: their file import needs
   the browser's private storage, which browsers only allow over https or on the same computer. The page says
   "Unsupported environment ... open the build over https or localhost". Private https hosting comes later.
@@ -48,7 +57,9 @@ site's data (imported files and saves) after 7 days without a visit.
 `node <skill-dir>/scripts/pag.mjs package "<port>"` writes `<port>/package/<id>-portable/` (the build, launchers and
 a README.txt) and `<port>/package/<id>.zip`.
 - Windows: double-click `Play-Windows.bat` (needs nothing installed). macOS: `Play-macOS.command` (first time:
-  right-click, Open). Linux: `Play-Linux.sh`. macOS and Linux need Node.js.
+  right-click, Open). Linux: `Play-Linux.sh`. On macOS and Linux the launcher uses Node.js when it is installed.
+  Without Node.js it falls back to python3, but only for builds that need neither cross-origin isolation nor
+  case-insensitive file names (Ruffle and DOS builds); already-web games need Node.js there.
 - Each launcher serves on 127.0.0.1 at the game's fixed port and opens the browser. If the port is busy, it assumes
   the game is already running and just opens the browser.
 - Bundled packages contain the game files. pag prints "Private copy: contains your game files. Do not share

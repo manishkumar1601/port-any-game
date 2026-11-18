@@ -29,12 +29,13 @@ Odds: ActionScript 1/2 games (AVM1) 85–95%, ActionScript 3 games (AVM2) 55–8
 
 | What you see | Cause | Fix |
 |---|---|---|
-| build: "the Ruffle runtime is not installed; run: pag setup ruffle --yes" | runtime missing | Step 1 (show the size first). |
+| build: "the Ruffle runtime is not installed; run: pag setup ruffle --yes" | runtime missing | Do step 1: show the size and ask first. Never run the `--yes` line from the message directly. |
 | build: "no SWF found in game/ and no Flash projector executable in the survey" | no Flash content | Check `<game>` is the right folder. Games that download their SWFs from the internet cannot be ported. |
 | the game is one `.exe` with no `.swf` | a Flash projector: the SWF is stored at the end of the exe | Nothing to do: build sets `"projector": true` and the browser cuts the SWF out of the exe. If the page says "not a Flash projector: no SWF trailer", the exe is not a projector; look for the real `.swf`. |
 | a loader, menu or wrong movie plays | build guessed the wrong main SWF | Set `swf` in `<port>/build/lane.json` to the right file (path inside `game/`, forward slashes), then pack again. A new `pag build` resets the choice. |
 | missing features, errors or a blank stage in an ActionScript 3 game | Ruffle supports AVM2 less completely | Report it honestly; M1 has nothing to tune. Check whether another lane in the survey applies. |
 | verify `privacy` fails (cross-origin request, or a request with a body) | the SWF tries to reach a server (ads, high scores, remote files) | The request is blocked, as it should be. Report which parts of the game need that server. |
+| a gamepad does nothing | Ruffle maps no gamepad buttons in M1 | Tell the user Flash builds take keyboard and mouse only for now. |
 | verify `frozen` fails on a still title screen | many Flash games wait for a click; M1 verify only presses keys, and this lane declares none | Look at the screenshot. If the title is drawn correctly, say so and rely on the user's 2-minute check. |
 
 ### Verify notes
