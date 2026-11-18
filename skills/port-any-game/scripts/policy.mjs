@@ -1,5 +1,5 @@
 // Single authoritative guardrail (spec §11). Every pag command and every agent hook calls it.
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -25,6 +25,10 @@ const VERCEL_OTHER = new Set(['dev', 'env', 'login', 'logout', 'link', 'pull', '
   'help', 'switch', 'teams', 'bisect', 'build', 'rm', 'remove', 'alias', 'git', 'project', 'integration', 'telemetry', 'init', 'cache']);
 const ANY_ARG_WRITERS = new Set(['rm', 'del', 'erase', 'rmdir', 'rd', 'touch', 'mkdir', 'md', 'tee', 'truncate', 'ren', 'rename',
   'mv', 'move', 'remove-item', 'set-content', 'add-content', 'out-file', 'new-item', 'move-item', 'rename-item', 'clear-content']);
+// I2: deleters and their recursive flags: POSIX bundles (-r, -rf, -R), --recursive, PowerShell -Recurse in any accepted
+// prefix or case (-r, -rec, -Recurse:$true; rm/rmdir/rd/del/erase/ri are its aliases there), cmd's /s (also /s/q).
+const DELETERS = new Set(['rm', 'rmdir', 'rd', 'del', 'erase', 'remove-item', 'ri']);
+const RECURSIVE_RE = /^(--recursive|-[rfivd]*r[rfivd]*|-r(e(c(u(r(se?)?)?)?)?)?(:\$true)?|(\/[a-z])*\/s(\/[a-z])*)$/i;
 const DEST_WRITERS = new Set(['cp', 'copy', 'xcopy', 'robocopy', 'install', 'rsync', 'copy-item', 'cpi', 'expand-archive']);
 // Options whose value is a destination path. ci = case-insensitive (PowerShell).
 const DEST_OPTS = {
@@ -49,19 +53,22 @@ export function isPublicAllowed(port) {
     && (port.data.redistributable === true || (port.acks ?? []).some((a) => a?.id === 'ACK_RIGHTS_HOLDER' && a.at));
 }
 
+// Our port.json in dir, or null (none, or someone else's).
+function portAt(dir) {
+  const f = path.join(dir, 'port.json');
+  if (!existsSync(f)) return null;
+  try {
+    const j = JSON.parse(readFileSync(f, 'utf8').replace(/^﻿/, ''));
+    return !j.schema || String(j.schema).startsWith('port-any-game/port@') ? j : null; // someone else's port.json
+  } catch { return { data: { mode: 'byo' } }; } // unreadable port.json: assume the strictest non-public mode
+}
+
 // Nearest port.json at or above `start` (a file or directory, need not exist).
 function findPort(start) {
   let dir = path.resolve(start);
   for (;;) {
-    const f = path.join(dir, 'port.json');
-    if (existsSync(f)) {
-      let port = { data: { mode: 'byo' } }; // unreadable port.json: assume the strictest non-public mode
-      try {
-        const j = JSON.parse(readFileSync(f, 'utf8').replace(/^﻿/, ''));
-        port = !j.schema || String(j.schema).startsWith('port-any-game/port@') ? j : null; // someone else's port.json
-      } catch { /* keep strict */ }
-      if (port) return { root: dir, port, public: isPublicAllowed(port) };
-    }
+    const port = portAt(dir);
+    if (port) return { root: dir, port, public: isPublicAllowed(port) };
     const up = path.dirname(dir);
     if (up === dir) return null;
     dir = up;
@@ -208,6 +215,38 @@ function writeTarget(p, dir) {
   if (rel(ctx.root, abs).toLowerCase() === 'port.json') throw new PolicyError('PORT_JSON_WRITE', `port.json is written only by pag. ${ASK}`);
 }
 
+// A port root at or below dir. Links are never followed (the game link leads into the install).
+// ponytail: bounded scan (depth 4, 5000 entries); a port buried deeper under a deleted folder is missed unless the
+// command runs from inside it (recursiveDelete also checks the cwd's own port).
+function portBelow(dir, depth = 4, budget = { n: 5000 }) {
+  if (portAt(dir)) return dir;
+  if (!depth) return null;
+  let ents;
+  try { ents = readdirSync(dir, { withFileTypes: true }); } catch { return null; }
+  for (const e of ents) {
+    if (--budget.n < 0) return null;
+    if (!e.isDirectory() || e.name === 'node_modules' || e.name === '.git') continue;
+    const hit = portBelow(path.join(dir, e.name), depth - 1, budget);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+// I2: a recursive delete of a port folder, or of a folder above one, is refused.
+function recursiveDelete(name, args, dir) {
+  if (!DELETERS.has(name) || !args.some((a) => RECURSIVE_RE.test(a))) return;
+  const here = findPort(dir)?.root;
+  for (const x of args.filter((a) => !a.startsWith('-') && !/^(\/[a-z?])+$/i.test(a))) {
+    const segs = posix(x).split('/');
+    const w = segs.findIndex((s) => /[*?[]/.test(s));
+    const target = rp(dir, w < 0 ? x : segs.slice(0, w).join('/') || '.'); // a glob deletes inside its folder
+    const hit = (here && within(target, here) ? here : null) ?? portBelow(target);
+    if (!hit) continue;
+    const g = path.join(hit, 'game');
+    throw new PolicyError('GAME_LINK_DELETE', `${name} ${x} would delete the port folder ${hit} recursively. Its game/ is a link to the user's real install, and on Windows PowerShell 5.1 a recursive delete follows it and deletes the game itself. Ask the user to do it: first remove only the link (Windows: cmd /c rmdir "${g}" or (Get-Item "${g}").Delete(); macOS/Linux: rm "${g}"), then delete the folder.`);
+  }
+}
+
 function optValues(name, args) {
   const spec = DEST_OPTS[name];
   if (!spec) return [];
@@ -264,6 +303,7 @@ function shellCheck(command, cwd, depth = 0) {
         if (ctx && !ctx.public) throw new PolicyError('PUBLIC_BUNDLED', `${name} would publish this port's build, which contains game data. Publishing needs a rights-holder or redistributable port. ${ASK}`);
       }
     }
+    recursiveDelete(name, args, dir);
     const pos = args.filter((x) => !(x.startsWith('-') || /^\/[a-z?]$/i.test(x)));
     if (ANY_ARG_WRITERS.has(name)) pos.forEach((x) => writeTarget(x, dir));
     else if (DEST_WRITERS.has(name) && pos.length > 1) writeTarget(name === 'robocopy' ? pos[1] : pos.at(-1), dir);

@@ -93,6 +93,39 @@ test('denies write into game/', () => {
   assert.equal(sh('node pag.mjs survey game', root).deny, false);
 });
 
+// I2: on Windows PowerShell 5.1, Remove-Item -Recurse follows the port's game junction into the real install.
+test('denies recursive deletes of a port folder or an ancestor of one', () => {
+  const parent = path.join(base, 'ports-parent');
+  const root = port(path.join('ports-parent', 'deep', 'r1'));
+  const q = (p) => `"${p}"`;
+  const cases = [
+    [`rm -rf ${q(root)}`, base], [`rm -r ${q(root)}`, base], [`rm -R ${q(root)}`, base], [`rm -fr ${q(root)}`, base], [`rm --recursive ${q(root)}`, base],
+    [`rm -rf ${q(parent)}`, base], ['rm -rf ..', path.join(root, 'work')], ['rm -rf *', root], ['rm -rf deep', parent],
+    [`rmdir /s /q ${q(root)}`, base], [`rd /S ${q(root)}`, base], [`del /s /q ${q(root)}`, base], [`cmd /c "rmdir /s /q ${root}"`, base],
+    [`Remove-Item -Recurse -Force ${q(root)}`, base], [`remove-item ${q(root)} -recurse`, base], [`Remove-Item -Path ${q(root)} -r`, base],
+    [`Remove-Item ${q(root)} -Rec -Force`, base], [`REMOVE-ITEM -RECURSE:$true ${q(root)}`, base], [`rm -Recurse ${q(root)}`, base], [`ri -r ${q(root)}`, base],
+    [`powershell -NoProfile -Command "Remove-Item -Recurse -Force '${root}'"`, base], [`cd ${q(parent)} && rm -rf deep`, base],
+  ];
+  for (const [c, cwd] of cases) {
+    const r = sh(c, cwd);
+    assert.equal(r.code, 'GAME_LINK_DELETE', `${c} (in ${cwd}): ${r.reason}`);
+  }
+  const r = sh(`Remove-Item -Recurse -Force ${q(root)}`, base);
+  assert.ok(r.reason.includes(root), r.reason);
+  assert.match(r.reason, /cmd \/c rmdir "[^"]+game"/);
+  assert.match(r.reason, /\(Get-Item "[^"]+game"\)\.Delete\(\)/);
+  assert.match(r.reason, /rm "[^"]+game"/);
+
+  // Not a port and not above one; inside a port; not recursive.
+  const plain = path.join(base, 'not-a-port');
+  mkdirSync(path.join(plain, 'sub'), { recursive: true });
+  for (const [c, cwd] of [[`rm -rf ${q(plain)}`, base], [`Remove-Item -Recurse -Force ${q(plain)}`, base], [`rmdir /s /q ${q(plain)}`, base],
+    ['rm -rf work', root], ['Remove-Item -Recurse build', root], ['rm -rf sub', plain], [`rm -f ${q(path.join(root, 'work', 'a.txt'))}`, base],
+    [`Remove-Item -Force ${q(path.join(root, 'work'))}`, base]]) {
+    assert.deepEqual(sh(c, cwd), { deny: false, reason: '' }, `${c} (in ${cwd})`);
+  }
+});
+
 test('allows unrelated commands', () => {
   const root = port('p7');
   for (const c of ['npm test', 'node --test "test/**/*.test.mjs"', 'git status', 'git log --oneline -5', 'git diff HEAD~1', 'ls -la', 'cat package.json', 'npm install --save-dev prettier',

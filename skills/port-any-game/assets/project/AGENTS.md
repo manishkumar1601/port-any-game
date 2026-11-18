@@ -5,6 +5,10 @@ This folder is one game port, made with port-any-game. It is its own git reposit
 1. Read `PORTING_LOG.md` first. Resume at the first unchecked item and log what you do.
 2. Run `pag status` to see the port state before you act.
 3. `game/` is a read-only link to the user's own install. Never write into it.
+   Never delete or move this port folder, or anything in it, recursively: some tools (Windows PowerShell 5.1
+   `Remove-Item -Recurse`) follow the `game` link and delete the user's real game. If the user wants the port
+   removed, explain this and let them do it: remove only the link first (Windows `cmd /c rmdir <port>\game`,
+   macOS/Linux `rm <port>/game`), then delete the folder.
 4. Never commit or push `game/`, `work/`, `build/`, `dist/`, `analysis/` or any game bytes.
    The git hooks in `.githooks/` block game magic bytes, survey hashes and binaries over 5 MiB.
    Do not bypass them (no `--no-verify`, no editing `core.hooksPath`).
