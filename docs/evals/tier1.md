@@ -91,6 +91,7 @@ blocked with the port-any-game DRM reason).
 - [ ] Codex on Windows: install, review and trust the hook, run one shell call. Record which shell ran `command` vs `commandWindows`; whether `PLUGIN_ROOT` was visible and in what form; the raw stdin payload (replace the Codex fixtures and flip `_provenance` to `observed:`); whether JSON deny at exit 0 blocks and whether exit 2 blocks; whether `; exit $LASTEXITCODE` is needed.
 - [ ] Copilot CLI on Windows: same, with the `bash` and `powershell` fields. Also: is a root variable set, the hook cwd, is `toolArgs` a string or object, does `exec` + `args` work.
 - [ ] Claude Code: one Bash and one Write call with the exec-form hook; confirm the payload and that exit 2 blocks.
+- [ ] Claude Code on Windows: one `PowerShell` tool call (`steamless.exe x game.exe`, must be denied with our message) and one `NotebookEdit` of a file under `<port>/game/` (must be denied). Confirm the tool names in the payload match the matcher `Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit|WebFetch` (I1).
 - [ ] Does Codex run plugin hooks installed via `codex plugin add` from the CLI, or only on desktop?
 
 ### Spike c (OpenCode guard)

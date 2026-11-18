@@ -34,6 +34,15 @@ test('normalizes every recorded payload', () => {
   assert.equal(normalizeEvent({ toolName: 'bash', toolArgs: { command: 'ls' }, cwd: '/x' }).command, 'ls');
 });
 
+test('claude PowerShell and NotebookEdit calls reach the policy (I1)', () => {
+  const ps = { ...fixture('claude-pretooluse-bash'), tool_name: 'PowerShell' };
+  const r = guard('claude', JSON.stringify(ps));
+  assert.equal(r.status, 2, r.stderr);
+  assert.match(r.stderr, /DRM removal/);
+  const nb = normalizeEvent({ tool_name: 'NotebookEdit', cwd: '/x', tool_input: { notebook_path: 'game/a.ipynb', new_source: 'x' } });
+  assert.deepEqual([nb.tool, nb.path], ['write', 'game/a.ipynb']);
+});
+
 test('formatDeny copilot JSON exit 0', () => {
   const d = formatDeny('copilot', 'nope');
   assert.equal(d.exitCode, 0);

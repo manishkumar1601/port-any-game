@@ -98,7 +98,7 @@ test('claude hooks.json uses exec form with CLAUDE_PLUGIN_ROOT', () => {
   const { hooks } = JSON.parse(read('hooks/hooks.json'));
   const pag = '${CLAUDE_PLUGIN_ROOT}/skills/port-any-game/scripts/pag.mjs';
   const pre = hooks.PreToolUse[0];
-  assert.equal(pre.matcher, 'Bash|Write|Edit|MultiEdit|WebFetch');
+  assert.equal(pre.matcher, 'Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit|WebFetch');
   assert.deepEqual(pre.hooks[0], { type: 'command', command: 'node', args: [pag, 'guard', '--host=claude'] });
   assert.deepEqual(hooks.SessionStart[0].hooks[0], { type: 'command', command: 'node', args: [pag, 'status', '--host=claude'] });
   // Run it the way Claude does: no shell, the placeholder substituted into each arg.
@@ -106,6 +106,20 @@ test('claude hooks.json uses exec form with CLAUDE_PLUGIN_ROOT', () => {
   const r = spawnSync(process.execPath, args, { input: fixture('claude-pretooluse-bash'), encoding: 'utf8' });
   assert.equal(r.status, 2);
   assert.match(r.stderr, /DRM removal/);
+});
+
+// I1: Claude Code's built-in tools (Windows adds PowerShell). Every one the guard classifies must reach it, and the
+// matcher names no tool the guard ignores.
+test('the claude matcher covers every Claude tool the guard classifies', async () => {
+  const { normalizeEvent } = await import('../skills/port-any-game/scripts/guard.mjs');
+  const CLAUDE_TOOLS = ['Bash', 'PowerShell', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Read',
+    'Glob', 'Grep', 'LS', 'Task', 'TodoWrite', 'NotebookRead', 'BashOutput', 'KillShell', 'ExitPlanMode', 'Skill', 'SlashCommand'];
+  const { matcher } = JSON.parse(read('hooks/hooks.json')).hooks.PreToolUse[0];
+  const matches = (t) => new RegExp(`^(?:${matcher})$`).test(t);
+  const guarded = CLAUDE_TOOLS.filter((t) => normalizeEvent({ tool_name: t, tool_input: {} }).tool !== 'other');
+  assert.deepEqual(guarded.filter((t) => !matches(t)), [], 'guarded tools the matcher misses');
+  assert.deepEqual(matcher.split('|').filter((t) => normalizeEvent({ tool_name: t, tool_input: {} }).tool === 'other'), [], 'matcher names the guard ignores');
+  assert.ok(matches('PowerShell') && matches('NotebookEdit'));
 });
 
 // Run a hook command string the way this OS's form runs (Windows: PowerShell; elsewhere: sh).
