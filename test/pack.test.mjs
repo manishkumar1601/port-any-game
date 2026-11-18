@@ -429,3 +429,24 @@ test('pag build dispatches to the lane build or explains it has none', async () 
   assert.equal(await runBuild([path.join(base, 'not-a-port')], c.io), 2);
   assert.match(c.o.err, /not a port folder/);
 });
+
+test('pack refuses a byo lane with a build step before build, and creates no dist', async () => {
+  const p = makePort();
+  const built = lane({ build: async () => {}, dataModes: ['byo'] });
+  await assert.rejects(pack(p.dir, opts({ laneModule: built })), /run `pag build` first/);
+  assert.equal(existsSync(path.join(p.dir, 'dist')), false);
+  assert.equal(existsSync(path.join(p.dir, 'work')), false);
+});
+
+test('pack accepts a byo lane with a build step after build', async () => {
+  const p = makePort();
+  mkdirSync(path.join(p.dir, 'build'), { recursive: true });
+  writeFileSync(path.join(p.dir, 'build', 'lane.json'), '{}');
+  const r = await pack(p.dir, opts({ laneModule: lane({ build: async () => {}, dataModes: ['byo'] }) }));
+  assert.equal(existsSync(path.join(r.distDir, 'shell.json')), true);
+});
+
+test('pack still packs a byo lane without a build step', async () => {
+  const p = makePort();
+  assert.equal(existsSync((await pack(p.dir, opts())).distDir), true);
+});

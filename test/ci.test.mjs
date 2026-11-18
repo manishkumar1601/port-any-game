@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { CASES, cleanup, ghError, keepPort, parseE2eArgs, skipExit, targetFpsOverride, skipReason } from './e2e/run.mjs';
+import { CASES, cleanup, ghError, keepPort, parseE2eArgs, skipExit, targetFpsOverride, mergeTargetFps, skipReason } from './e2e/run.mjs';
 
 const tmp = mkdtempSync(path.join(tmpdir(), 'pag-ci-'));
 after(() => { rmSync(tmp, { recursive: true, force: true, maxRetries: 5 }); cleanup(); });
@@ -54,6 +54,13 @@ test('PAG_E2E_TARGET_FPS: unset, empty or not a positive number means no overrid
   for (const v of [undefined, '', ' ', '0', '-5', 'abc']) assert.equal(targetFpsOverride({ PAG_E2E_TARGET_FPS: v }), null, String(v));
   assert.equal(targetFpsOverride({}), null);
   assert.equal(targetFpsOverride({ PAG_E2E_TARGET_FPS: '10' }), 10);
+});
+
+test('PAG_E2E_TARGET_FPS lowers but never raises target_fps', () => {
+  assert.equal(mergeTargetFps({ target_fps: 30 }, 10).target_fps, 10);
+  assert.equal(mergeTargetFps({ target_fps: 5 }, 10).target_fps, 5);
+  assert.equal(mergeTargetFps({}, 10).target_fps, 10);
+  assert.equal(mergeTargetFps(undefined, 10).target_fps, 10);
 });
 
 test('PAG_E2E_KEEP copies the port with its verify/ report; unset keeps nothing', () => {

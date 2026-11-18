@@ -94,12 +94,13 @@ export async function pipeline(laneId, fixture, { soakSec = 5, mode = 'bundled',
 // R68: PAG_E2E_TARGET_FPS (test-only; CI sets it for the GPU-less macOS runner) overrides verify.target_fps in the packed
 // shell.json. Unset, empty or not a positive number means no override. Product thresholds are never touched.
 export const targetFpsOverride = (env = process.env) => { const n = Number(env.PAG_E2E_TARGET_FPS); return env.PAG_E2E_TARGET_FPS?.trim() && n > 0 ? n : null; };
+export const mergeTargetFps = (verify, fps) => ({ ...verify, target_fps: Math.min(fps, verify?.target_fps ?? fps) });
 function applyTargetFps(distDir, env = process.env) {
   const fps = targetFpsOverride(env);
   if (!fps) return;
   const f = path.join(distDir, 'shell.json');
   const shell = JSON.parse(readFileSync(f, 'utf8'));
-  writeFileSync(f, `${JSON.stringify({ ...shell, verify: { ...shell.verify, target_fps: fps } }, null, 2)}\n`);
+  writeFileSync(f, `${JSON.stringify({ ...shell, verify: mergeTargetFps(shell.verify, fps) }, null, 2)}\n`);
 }
 async function pipelineIn(laneId, fixture, { soakSec, mode, query }) {
   const dir = path.join(base, `case-${++n}`);

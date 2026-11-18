@@ -224,6 +224,7 @@ export async function pack(portDir, { mode, laneModule, lock, warn = () => {} } 
   const lane = laneModule ?? LANES[port.lane];
   if (!lane) throw new UsageError(`unknown lane '${port.lane}' in port.json`);
   if (lane.external) throw new Error(`${lane.id} routes to an existing web port; there is nothing to pack. Run \`pag build\` and follow its message.`);
+  if (lane.build && mode === 'byo' && !existsSync(path.join(dir, 'build', 'lane.json'))) throw new Error(`lane ${lane.id} needs its build output: run \`pag build\` first (no build/lane.json)`);
   // R29: bundled-public is lane-independent (gated only by isPublicAllowed above); byo/bundled must be in dataModes.
   if (mode !== 'bundled-public' && !lane.dataModes?.includes(mode)) throw new UsageError(`lane ${lane.id} supports data modes ${lane.dataModes?.join(', ')}; not '${mode}'`);
 

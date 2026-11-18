@@ -52,7 +52,6 @@ Items carried out of M1. Legend: **[M3-GATE]** must land before the M3 Windows l
 
 ### Lanes
 
-- L: `pag pack` on dos-jsdos or rt-ruffle before `build` succeeds writes a dist that fails at Play (no `lane_config`). Make pack refuse, or print "run pag build first" (a pack-time check like the one web-extract got).
 - FR: web-extract `<head>` regex can match inside a comment; rAF replacement; SWF pick heuristic; per-sample DOM walk; rAF not cancelled; getter re-reads the lock.
 - FR: dos-jsdos `short83` ignores invalid characters; `dosbox.conf` name collision; Node 20.0–20.11 gaps (engines now `>=20.12`).
 - FR: known-port: Doom family shares one URL; `SOURCES.md` non-OSI caveat; no jkdf2 store/title test; catalog signatures were written from memory, so run a maintainer eval against real installs.
