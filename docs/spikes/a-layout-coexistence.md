@@ -56,7 +56,9 @@ Commands (identical for A, B, C unless noted):
 
 **Cursor**: no CLI installed. Unverified.
 
-## Maintainer must verify (move to docs/evals/tier1.md)
+## Maintainer must verify
+
+Moved to the checklist in [docs/evals/tier1.md](../evals/tier1.md) (section 3). The original list follows for context.
 
 1. Copilot CLI (real install, authenticated): `copilot plugin marketplace add <repo>` and `copilot plugin install port-any-game@port-any-game` on a repo that has a root `plugin.json`. Does it install, which manifest wins, any rejection?
 2. Cursor: import the repo (team marketplace) or copy it into `~/.cursor/plugins/local/`, with and without a root `plugin.json`. Which manifest does it read?

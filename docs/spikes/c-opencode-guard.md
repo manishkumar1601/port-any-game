@@ -70,7 +70,9 @@ So the guard logic is right for both entry points. What the mock cannot show is 
 3. Write the install doc so `opencode plugin add github:...` is marked v2-only; on v1 use the file copy route.
 4. Add a plugin-loaded self-check to `doctor.mjs` if cheap: v1 gives no CLI way to list loaded plugins (`opencode debug config` showed `plugin: []` even when loaded).
 
-## Maintainer must verify (needs a model session; move to docs/evals/tier1.md)
+## Maintainer must verify
+
+Moved to the checklist in [docs/evals/tier1.md](../evals/tier1.md) (section 3). The original list follows for context.
 
 1. On **1.19.x** with the shim installed, ask the agent to run `steamless.exe x game.exe` through the bash tool: expect a block with our message, and `$GUARD_LOG`-style capture of `(input, output)` to replace the v1 fixture (flip `_provenance` to `observed:` with how it was captured).
 2. On **2.3.x** (install `@opencode/cli`, which could not be run here): same, via `ctx.permission.hook("evaluate")`. Confirm `setup(ctx)` runs, `e.action === "shell"`, `e.resources` holds the raw command, and the message reaches the model. Capture the event object.

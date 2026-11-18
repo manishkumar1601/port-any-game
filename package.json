@@ -8,6 +8,7 @@
   "scripts": {
     "test": "node --test --test-concurrency=1 \"test/**/*.test.mjs\"",
     "gen": "node scripts/gen-wrappers.mjs",
+    "e2e": "node test/e2e/run.mjs all",
     "validate": "node scripts/validate.mjs && node scripts/gen-wrappers.mjs --check"
   }
 }

@@ -69,7 +69,9 @@ Guard saw the payload intact (BOM and CRLF both present) in every case; `JSON.pa
 
 Each has a top-level `_provenance` ("documented: <url>" or "observed: <how>") and most have a `_notes` line. Field values (ids, paths, timestamps) are illustrative; the **shapes** come from the cited docs. The guard parser must ignore `_provenance` and `_notes`. Deny samples use `steamless.exe x game.exe`.
 
-## Maintainer must verify (needs authenticated session; move to docs/evals/tier1.md)
+## Maintainer must verify
+
+Moved to the checklist in [docs/evals/tier1.md](../evals/tier1.md) (section 3). The original list follows for context.
 
 1. **Codex on Windows**: install the plugin, review and trust the hook, run one shell call. Record: which shell ran `command` vs `commandWindows`; whether `PLUGIN_ROOT` was visible and in what form (`%PLUGIN_ROOT%`, `$env:PLUGIN_ROOT`, or an already-substituted path); the raw stdin payload (replace the Codex fixtures with it and flip `_provenance` to `observed:`); whether JSON deny at exit 0 blocks and whether exit 2 blocks; whether a `commandWindows` that ends `; exit $LASTEXITCODE` is needed.
 2. **Copilot CLI on Windows**: same, with `bash` and `powershell` fields. Also: is `PLUGIN_ROOT` (or any root variable) set for plugin hooks, what is the hook cwd, is `toolArgs` a string or object, does `exec` + `args` work.

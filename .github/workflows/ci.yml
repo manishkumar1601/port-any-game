@@ -1,0 +1,57 @@
+name: ci
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    defaults:
+      run:
+        shell: bash
+    env:
+      # Linux has no GPU: verify adds these itself; repeating them is harmless.
+      PAG_CHROME_FLAGS: ${{ runner.os == 'Linux' && '--use-angle=swiftshader --enable-unsafe-swiftshader' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The e2e tool cache is <os.tmpdir()>/pag-e2e-tools (test/e2e/run.mjs); os.tmpdir() differs per OS, so ask node.
+      - name: Locate the e2e tool cache and keep dir
+        run: |
+          node -e "const p=require('path'),d=require('os').tmpdir(),f=(n)=>p.join(d,n).split(p.sep).join('/');console.log('PAG_E2E_TOOLS='+f('pag-e2e-tools'));console.log('PAG_E2E_KEEP='+f('pag-e2e-keep'))" >> "$GITHUB_ENV"
+      - name: Unit tests (browser e2e runs once, below)
+        env:
+          PAG_E2E: '0'
+        run: npm test
+      - name: Validate
+        run: node scripts/validate.mjs
+      - name: Wrappers are up to date
+        run: node scripts/gen-wrappers.mjs --check
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.PAG_E2E_TOOLS }}
+          key: e2e-tools-${{ runner.os }}-${{ hashFiles('skills/port-any-game/scripts/toolchain.lock.json') }}
+      - name: Setup runtimes (into the e2e tool cache)
+        env:
+          PAG_CACHE: ${{ env.PAG_E2E_TOOLS }}
+        run: |
+          node skills/port-any-game/scripts/pag.mjs setup ruffle --yes
+          node skills/port-any-game/scripts/pag.mjs setup jsdos --yes
+      - name: Lane e2e
+        run: npm run e2e
+      - name: Upload verify reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-${{ matrix.os }}
+          path: ${{ env.PAG_E2E_KEEP }}/**/verify/**
+          if-no-files-found: ignore

@@ -2,7 +2,7 @@
 // `node test/e2e/run.mjs <lane>` runs that lane's cases (exit 0 pass or skipped, 1 failure, 2 usage); the lane test
 // files import CASES and run them under node:test. Tasks 17-18 add their lanes to CASES.
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -28,7 +28,9 @@ const { makeAnimCom } = await import('../fixtures/make-dos-com.mjs');
 const { makeMZ } = await import('../fixtures/make-pe.mjs');
 const { ensureTool } = await import(`${SCRIPTS}/setup.mjs`);
 
-export const skipReason = () => {
+// PAG_E2E=0 turns every browser e2e case off (CI runs them once, via `npm run e2e`, not again under `npm test`).
+export const skipReason = (env = process.env) => {
+  if (env.PAG_E2E === "0") return "PAG_E2E=0; browser e2e skipped";
   const b = findBrowser();
   if (!b) return 'no Chrome/Edge found (install one or set PAG_BROWSER); browser e2e skipped';
   if (typeof WebSocket !== 'function') return 'the CDP runner needs Node 22+ (global WebSocket); browser e2e skipped';
@@ -58,6 +60,13 @@ export async function e2eTool(name, ensure = ensureTool) {
 }
 
 let n = 0;
+// PAG_E2E_KEEP=<dir>: copy each case's port (with its verify/ report) there, so CI can upload them when a case fails.
+export function keepPort(portDir, tag, env = process.env) {
+  if (!env.PAG_E2E_KEEP) return null;
+  const to = path.join(env.PAG_E2E_KEEP, tag);
+  cpSync(portDir, to, { recursive: true });
+  return to;
+}
 const failing = (r) => JSON.stringify(r.checks.filter((c) => c.status !== 'pass'), null, 1);
 
 // fixture(dir) makes the game install and returns its folder; the lane builds it. Returns {portDir, distDir, built, survey, report}.
@@ -75,6 +84,7 @@ async function pipelineIn(laneId, fixture, { soakSec, mode, query }) {
   const { built, distDir } = await withToolCache(async () => ({ built: await LANES[laneId].build(portDir), ...(await pack(portDir, { mode })) }));
   const t0 = Date.now();
   const report = await verify(distDir, { runner: 'cdp', soakSec, query });
+  keepPort(portDir, `${laneId}-${path.basename(dir)}`);
   console.log(`# ${laneId}: verify ${report.status} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
   return { portDir, distDir, built, survey: s, report };
 }
@@ -179,7 +189,7 @@ async function dosByo() {
   assert.match(lic, /GNU GENERAL PUBLIC LICENSE\s+Version 2, June 1991/, 'the GPL-2.0 text itself');
 }
 
-export const CASES = {
+const LANE_CASES = {
   'web-extract': [
     { name: 'web-extract NW.js fixture passes verify', run: () => passes('nwjs') },
     { name: 'web-extract Electron fixture passes verify', run: () => passes('electron') },
@@ -194,6 +204,9 @@ export const CASES = {
     { name: 'dos-jsdos BYO fixture passes verify with zero game bytes in dist', run: dosByo },
   ],
 };
+
+// 'all' = every lane's cases, in lane order.
+export const CASES = { ...LANE_CASES, all: Object.values(LANE_CASES).flat() };
 
 async function main(argv) {
   const cases = CASES[argv[0]];

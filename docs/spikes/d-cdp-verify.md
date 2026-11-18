@@ -103,6 +103,8 @@ for (let i = 0; i < 20; i++) { try { fs.rmSync(udd, { recursive: true, force: tr
 
 ## Not observed / for Task 23 CI to confirm
 
+The 3-OS CI matrix (.github/workflows/ci.yml) now runs this; what is left to confirm from its runs is in [docs/evals/tier1.md](../evals/tier1.md) (spike d).
+
 macOS and Linux are **unverified**. CI (`macos-latest`, `ubuntu-latest`, plus `windows-latest` again) must confirm each of:
 
 1. The launch flag set above starts a headless browser and writes `DevToolsActivePort` with a non-empty line 2 (Linux runners may need `--no-sandbox`; record whether it was required and whether Chrome or Chromium is the installed binary).

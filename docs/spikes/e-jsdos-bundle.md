@@ -99,4 +99,6 @@ Request log, run with `backend` `dosbox` (and via the raw `dosboxDirect`/`dosbox
 
 ## Not observed / for Task 23 CI to confirm
 
+The 3-OS CI matrix (.github/workflows/ci.yml) now runs this; what is left to confirm from its runs is in [docs/evals/tier1.md](../evals/tier1.md) (spike e).
+
 macOS and Linux are **unverified**. CI must confirm on each OS: (1) the same bundle runs with `dosboxDirect` and `Dos({url})` and `onFrame` yields changing frames; (2) COOP/COEP is not needed; (3) the `dosbox` and `dosboxX` backends both reach ready within the budget; (4) whether the UI canvas paints in headless Chrome/Chromium there (if it paints there, the Windows black canvas is a local artefact; if not, keep `ci` sampling); (5) the `initFs` `Entry[]` form if Task 18 wants it. Also not tested: audio RMS capture, keyboard input through CDP `Input.dispatchKeyEvent` into the UI canvas (only `ci.simulateKeyPress` was verified), the `jspi` backend, `Dos()` default backend when `backend` is omitted, saving/persisting (`save`, `.changes`), and bundles larger than a few hundred bytes.
