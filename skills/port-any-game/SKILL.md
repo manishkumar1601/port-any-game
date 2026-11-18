@@ -86,7 +86,8 @@ Ask in short rounds, each question with a recommended answer the user can accept
   Recommended: up to an hour; if it isn't playable by then, I stop and explain the options.
 
 ### 3. Survey and catalog
-If your agent has the `game-surveyor` subagent, let it run the survey. Otherwise run it yourself:
+If your agent has the `game-surveyor` subagent, let it run the survey (give it `<skill-dir>` and `<game>`).
+Otherwise run it yourself:
 `node <skill-dir>/scripts/pag.mjs survey "<game>"` (add `--json` for every detail). It reads file headers only and
 never runs the game. Exit 0 means GO or HARD, 4 means STOP. Report the verdict in 1–2 sentences: the lane, its odds,
 whether it is a true port or (later) Remote Play, and any existing port found.
@@ -149,7 +150,8 @@ new folder: `node <skill-dir>/scripts/pag.mjs new "<game>" "<new port>" --lane <
 
 ### 7. Gate
 Run the full check: `node <skill-dir>/scripts/pag.mjs verify "<port>/dist" --soak 120`. If your agent has the
-`port-verifier` subagent, let it run this and read the screenshots; it reports problems and never fixes them.
+`port-verifier` subagent, give it `<skill-dir>` and `<port>` and let it run this and read the screenshots; it
+reports problems and never fixes them.
 Otherwise run it yourself and open the `step-*.png` screenshots. Fix until it passes, or tell the user honestly what
 still fails. Exit 3 means this machine cannot run the check (see [verify](references/verify.md)), not that the port
 failed.

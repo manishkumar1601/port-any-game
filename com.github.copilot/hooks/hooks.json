@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "node \"$PLUGIN_ROOT/skills/port-any-game/scripts/pag.mjs\" guard --host=copilot",
+        "powershell": "node \"$env:PLUGIN_ROOT/skills/port-any-game/scripts/pag.mjs\" guard --host=copilot; exit $LASTEXITCODE"
+      }
+    ],
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "node \"$PLUGIN_ROOT/skills/port-any-game/scripts/pag.mjs\" status --host=copilot",
+        "powershell": "node \"$env:PLUGIN_ROOT/skills/port-any-game/scripts/pag.mjs\" status --host=copilot; exit $LASTEXITCODE"
+      }
+    ]
+  }
+}

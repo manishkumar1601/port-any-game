@@ -1,0 +1,30 @@
+{
+  "description": "port-any-game for Codex (spike b): the guard denies with JSON at exit 0; commandWindows is PowerShell.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT:-$CLAUDE_PLUGIN_ROOT}/skills/port-any-game/scripts/pag.mjs\" guard --host=codex",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/skills/port-any-game/scripts/pag.mjs\" guard --host=codex; exit $LASTEXITCODE",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT:-$CLAUDE_PLUGIN_ROOT}/skills/port-any-game/scripts/pag.mjs\" status --host=codex",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/skills/port-any-game/scripts/pag.mjs\" status --host=codex; exit $LASTEXITCODE",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

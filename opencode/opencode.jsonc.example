@@ -1,0 +1,14 @@
+// port-any-game: optional declarative rules for OpenCode 2.x. They need no plugin code, so they still apply if the
+// guard plugin is not loaded. Merge the "permissions" entries into your opencode.json(c); OpenCode 1.x uses a
+// different key ("permission") and does not read these.
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permissions": [
+    { "action": "shell", "resource": "*steamless*", "effect": "deny" },
+    { "action": "shell", "resource": "*noceg*", "effect": "deny" },
+    { "action": "shell", "resource": "*steamemu*", "effect": "deny" },
+    { "action": "shell", "resource": "*steam_emu*", "effect": "deny" },
+    { "action": "shell", "resource": "wrangler deploy *", "effect": "ask" },
+    { "action": "shell", "resource": "npx wrangler deploy *", "effect": "ask" }
+  ]
+}

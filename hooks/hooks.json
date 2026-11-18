@@ -1,0 +1,28 @@
+{
+  "description": "port-any-game: policy guard before tool use, port status at session start (Claude Code exec form).",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Write|Edit|MultiEdit|WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/skills/port-any-game/scripts/pag.mjs", "guard", "--host=claude"]
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/skills/port-any-game/scripts/pag.mjs", "status", "--host=claude"]
+          }
+        ]
+      }
+    ]
+  }
+}

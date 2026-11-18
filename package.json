@@ -7,6 +7,7 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "test": "node --test --test-concurrency=1 \"test/**/*.test.mjs\"",
-    "validate": "node scripts/validate.mjs"
+    "gen": "node scripts/gen-wrappers.mjs",
+    "validate": "node scripts/validate.mjs && node scripts/gen-wrappers.mjs --check"
   }
 }
