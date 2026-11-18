@@ -27,7 +27,7 @@ export function matchCatalog(catalog, { identity = {}, files = [], engines = [] 
     else if (sigs.some((s) => files.some((f) => s.re.test(f.rel) && (s.size == null || f.size === s.size)))) tier = 'signature'; // ponytail: sha256 not checked (survey hashes only executables)
     else if (g.engines?.some((e) => engineIds.has(e))) tier = 'engine';
     else if (sameSet(want, tokens(g.title))) tier = 'title';
-    if (tier) out.push({ game_id: g.id, tier, needs_confirm: tier === 'engine' || tier === 'title', ports: g.ports });
+    if (tier) out.push({ game_id: g.id, tier, needs_confirm: tier === 'engine' || tier === 'title', redistributable: g.redistributable_data === true, ports: g.ports });
   }
   return out.sort((a, b) => RANK[a.tier] - RANK[b.tier]);
 }

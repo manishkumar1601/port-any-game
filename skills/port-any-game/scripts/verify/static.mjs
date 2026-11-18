@@ -21,7 +21,7 @@ export async function staticChecks(dist, shell, manifest, port) {
   // Public game data needs the rights holder's acknowledgement or catalog-redistributable data (spec §11).
   if (shell.data?.mode === 'bundled-public') {
     add('public', isPublicAllowed(port) ? 'pass' : 'fail', isPublicAllowed(port) ? 'public data allowed by port.json'
-      : `a bundled-public build needs port.json data.mode "bundled-public" plus ACK_RIGHTS_HOLDER or catalog-redistributable data${port ? '' : ' (no port.json found)'}`);
+      : `a bundled-public build needs an ACK_RIGHTS_HOLDER acknowledgement or catalog-redistributable data in port.json${port ? '' : ' (no port.json found)'}`);
   }
 
   const files = [];

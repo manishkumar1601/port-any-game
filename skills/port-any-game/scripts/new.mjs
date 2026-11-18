@@ -15,6 +15,9 @@ const USAGE = 'usage: pag new <gameDir> <outDir> [--lane <id>] [--resume]\n';
 class UsageError extends Error {}
 
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'game';
+// Free to share only when every confident (store/signature) match says so: an engine or title guess never counts, and
+// a folder that also holds a commercial game's files is not free.
+const freeToShare = (matches) => { const sure = matches.filter((m) => !m.needs_confirm); return sure.length > 0 && sure.every((m) => m.redistributable === true); };
 const exists = (p) => { try { lstatSync(p); return true; } catch { return false; } };
 const asset = (...p) => readFileSync(path.join(ASSETS, ...p), 'utf8');
 
@@ -51,7 +54,7 @@ export async function newPort({ gameDir, outDir, lane, resume = false, warn = ()
       lane: laneId,
       data: {
         mode: desc.dataModes[0],
-        ...(s.catalog_matches.some((m) => m.redistributable === true) ? { redistributable: true } : {}),
+        ...(freeToShare(s.catalog_matches) ? { redistributable: true } : {}),
       },
       tools: { node: process.versions.node },
       acks: [],

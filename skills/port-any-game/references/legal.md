@@ -91,7 +91,9 @@ One question at a time, in plain words. Fill in the parts in angle brackets. Rec
 | `ACK_RIGHTS_HOLDER` | Only when the user wants to share game files publicly: explain that this needs a game that is free to share or the rights to it (for example, they made it), and ask openly whether either applies, in their own words. Never suggest an answer. Record only their own statement, word for word, as the note (required). |
 
 Owning or buying a copy is not holding the rights: say so kindly if the user mixes them up. Recording
-`ACK_RIGHTS_HOLDER` publishes nothing; public hosting is not in this version.
+`ACK_RIGHTS_HOLDER` publishes nothing; public hosting is not in this version. Once it is recorded (or `pag new` found
+free-to-share data in the catalog), `pag pack "<port>" --mode bundled-public` builds with the game files for sharing
+and keeps that mode in `port.json`.
 
 ## Keep out of git and public hosting
 `game/`, `work/`, `build/`, `analysis/`, `verify/` (screenshots), and `dist/` and `package/` when they hold game

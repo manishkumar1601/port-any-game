@@ -26,6 +26,12 @@ test('matches by signature files', () => {
   assert.equal(m[0].tier, 'signature');
 });
 
+test('matches carry the catalog redistributable flag (I3)', () => {
+  const m = matchCatalog(cat, { identity: none, files: [f('freedoom1.wad')], engines: [{ id: 'idtech-doom' }] });
+  assert.deepEqual(m.find((x) => x.game_id === 'freedoom'), { game_id: 'freedoom', tier: 'signature', needs_confirm: false, redistributable: true, ports: m.find((x) => x.game_id === 'freedoom').ports });
+  assert.equal(m.find((x) => x.game_id === 'doom').redistributable, false);
+});
+
 test('engine-only match is tier engine', () => {
   const m = matchCatalog(cat, { identity: none, files: [], engines: [{ id: 'idtech-doom' }] });
   assert.ok(m.length > 0);

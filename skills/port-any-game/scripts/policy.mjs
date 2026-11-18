@@ -9,6 +9,8 @@ export class PolicyError extends Error {
 }
 
 const ASK = 'Ask the user. Do not edit port.json yourself; the user records consent with `pag ack`.';
+// R63: the one way to public use. The agent asks openly and never words the statement (references/legal.md).
+export const RIGHTS = 'Ask the user. Do not edit port.json yourself. Public use needs the rights to the game data: only if the user says, in their own words, that they hold them, record exactly that with `pag ack ACK_RIGHTS_HOLDER --note "<their words>"` (free-to-share data from the catalog is marked by `pag new`).';
 const PROTECTED = ['game', 'work', 'build', 'analysis', 'dist', 'extracted', 'recomp'];
 // Distinctive names are refused anywhere in a command; generic words only as command names or executable-like tokens.
 const DISTINCT_RE = /(?<![a-z0-9])(steamless|noceg|steam_?emu|smartsteamemu)(?![a-z0-9])/i;
@@ -47,10 +49,11 @@ const rp = (dir, p) => path.resolve(dir, posix(String(p).replace(HOME_RE, homedi
 const rel = (root, p) => (CI ? path.relative(root.toLowerCase(), p.toLowerCase()) : path.relative(root, p));
 const within = (root, p) => { const r = rel(root, p); return r === '' || (!r.startsWith('..') && !path.isAbsolute(r)); };
 
-// bundled-public only counts when the user (never the agent) recorded rights via `pag ack`, or the catalog says redistributable.
+// R63: public use is gated on rights only: the user (never the agent) recorded them via `pag ack` (pag adds `at`),
+// or `pag new` found catalog-redistributable data. data.mode follows (pack persists it); it unlocks nothing itself.
+// check-staged.mjs inlines the same rule (it runs without the skill).
 export function isPublicAllowed(port) {
-  return port?.data?.mode === 'bundled-public'
-    && (port.data.redistributable === true || (port.acks ?? []).some((a) => a?.id === 'ACK_RIGHTS_HOLDER' && a.at));
+  return port?.data?.redistributable === true || (port?.acks ?? []).some((a) => a?.id === 'ACK_RIGHTS_HOLDER' && a.at);
 }
 
 // Our port.json in dir, or null (none, or someone else's).
@@ -166,7 +169,7 @@ function gitCheck(toks, dir) {
   const ctx = findPort(d);
   if (!ctx || ctx.public) return;
   const deny = (what) => {
-    throw new PolicyError('PUBLIC_BUNDLED', `${what} would include game data (${PROTECTED.join('/, ')}/), which stays private. Add only lane/ or source files by name. ${ASK}`);
+    throw new PolicyError('PUBLIC_BUNDLED', `${what} would include game data (${PROTECTED.join('/, ')}/), which stays private. Add only lane/ or source files by name. ${RIGHTS}`);
   };
   const exists = () => PROTECTED.some((p) => existsSync(path.join(ctx.root, p)));
   const isProtected = (abs) => { const r = posix(rel(ctx.root, abs)); return !r.startsWith('..') && PROTECTED.includes(r.split('/')[0].toLowerCase()); };
@@ -300,7 +303,7 @@ function shellCheck(command, cwd, depth = 0) {
       const cands = [dir, ...args.filter((x) => !x.startsWith('-') || /^--[\w-]+=/.test(x)).map((x) => x.replace(/^--[\w-]+=/, ''))];
       for (const c of cands) {
         const ctx = findPort(rp(dir, c));
-        if (ctx && !ctx.public) throw new PolicyError('PUBLIC_BUNDLED', `${name} would publish this port's build, which contains game data. Publishing needs a rights-holder or redistributable port. ${ASK}`);
+        if (ctx && !ctx.public) throw new PolicyError('PUBLIC_BUNDLED', `${name} would publish this port's build, which contains game data. ${RIGHTS}`);
       }
     }
     recursiveDelete(name, args, dir);
@@ -352,7 +355,7 @@ export function assertTarget(port, target, { password } = {}) {
   if (target === 'local') return;
   if (target === 'lan') { if (!password) throw new PolicyError('LAN_NO_PASSWORD', 'serving beyond 127.0.0.1 needs a password (--password-env VAR).'); return; }
   if (target === 'public') {
-    if (!isPublicAllowed(port)) throw new PolicyError('PUBLIC_BUNDLED', `a public target needs a bundled-public port with a recorded rights-holder acknowledgement (or catalog-redistributable data). ${ASK}`);
+    if (!isPublicAllowed(port)) throw new PolicyError('PUBLIC_BUNDLED', `a public target needs game data the user holds the rights to. ${RIGHTS}`);
     return;
   }
   throw new Error(`unknown target '${target}'`);

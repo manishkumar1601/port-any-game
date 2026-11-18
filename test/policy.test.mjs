@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { checkToolUse, assertLaneAllowed, assertTarget, PolicyError } from '../skills/port-any-game/scripts/policy.mjs';
+import { checkToolUse, assertLaneAllowed, assertTarget, isPublicAllowed, PolicyError } from '../skills/port-any-game/scripts/policy.mjs';
 
 const base = mkdtempSync(path.join(tmpdir(), 'pag-policy-'));
 after(() => rmSync(base, { recursive: true, force: true }));
@@ -171,6 +171,24 @@ test('bundled-public with ACK_RIGHTS_HOLDER is public', () => {
   const a = port('q2', 'bundled-public', { acks: [{ id: 'ACK_RIGHTS_HOLDER', at: '2026-11-17T00:00:00Z' }] });
   const b = port('q3', 'bundled-public', { data: { redistributable: true } });
   for (const r of [a, b]) { assert.equal(sh('git add game/', r).deny, false); assert.equal(sh('vercel --prod', r).deny, false); }
+});
+
+// R63: rights decide, not data.mode (no pag command sets a mode before the rights are recorded).
+test('public use is gated on rights only, and the denial names the way forward', () => {
+  const ack = [{ id: 'ACK_RIGHTS_HOLDER', at: '2026-11-17T00:00:00Z' }];
+  assert.equal(isPublicAllowed({ data: { mode: 'byo' }, acks: ack }), true);
+  assert.equal(isPublicAllowed({ data: { mode: 'bundled', redistributable: true } }), true);
+  assert.equal(isPublicAllowed({ data: { mode: 'bundled-public' } }), false);
+  assert.equal(isPublicAllowed({ data: { mode: 'bundled-public' }, acks: [{ id: 'ACK_RIGHTS_HOLDER' }] }), false, 'an ack pag did not timestamp');
+  const owned = port('q11', 'bundled', { acks: ack });
+  assert.equal(sh('git add game/', owned).deny, false);
+  assert.equal(sh('wrangler deploy', owned).deny, false);
+  const r = sh('wrangler deploy', port('q12', 'bundled'));
+  assert.equal(r.deny, true);
+  assert.match(r.reason, /pag ack ACK_RIGHTS_HOLDER/);
+  assert.doesNotMatch(r.reason, /data\.mode/);
+  assert.match(sh('git add game/', port('q13')).reason, /pag ack ACK_RIGHTS_HOLDER/);
+  assert.throws(() => assertTarget({ data: { mode: 'bundled' } }, 'public'), /pag ack ACK_RIGHTS_HOLDER/);
 });
 
 test('write tool to port.json is denied', () => {

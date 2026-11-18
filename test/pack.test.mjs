@@ -187,6 +187,22 @@ test('bundled-public refused without ACK_RIGHTS_HOLDER', async () => {
   assert.equal((await pack(redist.dir, opts())).shell.data.mode, 'bundled-public');
 });
 
+// R63: once the rights are recorded, `pack --mode bundled-public` persists data.mode; the refusal names the way forward.
+test('pack --mode bundled-public persists data.mode once the rights gate passes', async () => {
+  const refused = makePort();
+  let c = io();
+  assert.equal(await run([refused.dir, '--mode', 'bundled-public'], c.io, opts()), 4);
+  assert.match(c.o.err, /pag ack ACK_RIGHTS_HOLDER/);
+  assert.doesNotMatch(c.o.err, /data\.mode/);
+  assert.equal(JSON.parse(readFileSync(path.join(refused.dir, 'port.json'), 'utf8')).data.mode, 'byo');
+
+  const owned = makePort({ acks: ACK });
+  c = io();
+  assert.equal(await run([owned.dir, '--mode', 'bundled-public'], c.io, opts()), 0, c.o.err);
+  assert.equal(JSON.parse(readFileSync(path.join(owned.dir, 'port.json'), 'utf8')).data.mode, 'bundled-public');
+  assert.equal((await pack(owned.dir, opts())).shell.data.mode, 'bundled-public', 'the next pack keeps it');
+});
+
 test('bundled-public is lane-independent; byo and bundled must be in dataModes (R29)', async () => {
   const byoOnly = lane({ dataModes: ['byo'] });
   const acked = makePort({ mode: 'bundled-public', acks: ACK });

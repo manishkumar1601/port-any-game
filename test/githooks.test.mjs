@@ -63,11 +63,20 @@ test('pre-commit allows lane source', { skip }, async () => {
   assert.equal(r.status, 0, r.stderr);
 });
 
-test('guard is skipped for bundled-public', { skip }, async () => {
-  const o = await port();
-  writeFileSync(path.join(o, 'port.json'), JSON.stringify({ data: { mode: 'bundled-public' } }));
-  stage(o, 'lane/data.bin', Buffer.concat([Buffer.from('PWAD'), Buffer.alloc(8)]));
-  assert.equal(hook(o).status, 0);
+// R63/M8: the same rights-only rule as policy.isPublicAllowed; data.mode alone unlocks nothing.
+test('guard is skipped only when the user holds the rights or the data is redistributable', { skip }, async () => {
+  const wad = Buffer.concat([Buffer.from('PWAD'), Buffer.alloc(8)]);
+  for (const [p, skipped] of [
+    [{ data: { mode: 'bundled-public' } }, false],
+    [{ data: { mode: 'bundled-public' }, acks: [{ id: 'ACK_RIGHTS_HOLDER' }] }, false], // no timestamp: not recorded by pag
+    [{ data: { mode: 'byo' }, acks: [{ id: 'ACK_RIGHTS_HOLDER', at: '2026-11-18T00:00:00Z', note: 'I made this game' }] }, true],
+    [{ data: { mode: 'bundled', redistributable: true } }, true],
+  ]) {
+    const o = await port();
+    writeFileSync(path.join(o, 'port.json'), JSON.stringify(p));
+    stage(o, 'lane/data.bin', wad);
+    assert.equal(hook(o).status, skipped ? 0 : 1, JSON.stringify(p));
+  }
 });
 
 test('pre-push rejects a committed WAD', { skip }, async () => {

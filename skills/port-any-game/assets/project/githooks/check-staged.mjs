@@ -1,6 +1,7 @@
 // Git guard for a port folder. Standalone, zero dependencies. Run by pre-commit (staged files)
 // and pre-push (`--push`, commits being pushed). Rejects game magic bytes, survey.json hashes
-// and binaries over 5 MiB. Skipped when port.json data.mode is bundled-public.
+// and binaries over 5 MiB. Skipped only when the game data may be public: the user recorded ACK_RIGHTS_HOLDER with pag
+// (it adds `at`) or the data is catalog-redistributable (the same rule as policy.isPublicAllowed, R63).
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -13,7 +14,8 @@ const ZERO = /^0+$/;
 const git = (args, opts = {}) => execFileSync('git', args, { maxBuffer: 2 ** 31 - 1, stdio: ['ignore', 'pipe', 'pipe'], ...opts });
 const read = (f) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return null; } };
 
-if (read('port.json')?.data?.mode === 'bundled-public') process.exit(0);
+const port = read('port.json');
+if (port?.data?.redistributable === true || (port?.acks ?? []).some((a) => a?.id === 'ACK_RIGHTS_HOLDER' && a.at)) process.exit(0);
 
 const hashes = new Set();
 (function collect(v) {

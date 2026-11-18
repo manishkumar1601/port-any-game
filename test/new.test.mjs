@@ -89,3 +89,22 @@ test('new does not create commits', async () => {
   await newPort({ gameDir: nw(), outDir: o });
   assert.equal(git(o, 'rev-list', '--all').stdout.trim(), '');
 });
+
+// I3/R63: a confident catalog match on free-to-share data marks the port redistributable, which unlocks bundled-public.
+test('catalog-redistributable data reaches port.json and unlocks a bundled-public pack end to end', async () => {
+  const { run: pack } = await import('../skills/port-any-game/scripts/pack.mjs');
+  const wad = Buffer.concat([Buffer.from('IWAD'), Buffer.alloc(60)]);
+  const g = game({ 'package.nw': 'PK', 'nw.pak': 'x', 'Game.exe': makePE(), 'freedoom1.wad': wad }), o = out();
+  const port = await newPort({ gameDir: g, outDir: o, lane: 'web-extract' });
+  assert.equal(port.data.redistributable, true);
+  const msgs = { out: '', err: '' };
+  assert.equal(await pack([o, '--mode', 'bundled-public'], { out: (t) => (msgs.out += t), err: (t) => (msgs.err += t) }), 0, msgs.err);
+  assert.equal(JSON.parse(readFileSync(path.join(o, 'port.json'), 'utf8')).data.mode, 'bundled-public');
+  assert.deepEqual(readFileSync(path.join(o, 'dist', 'game', 'freedoom1.wad')), wad);
+
+  // A commercial WAD only engine-matches freedoom (needs_confirm), and a folder with both is not free to share.
+  for (const files of [{ 'doom.wad': wad }, { 'doom.wad': wad, 'freedoom1.wad': wad }]) {
+    const p = await newPort({ gameDir: game({ 'package.nw': 'PK', 'Game.exe': makePE(), ...files }), outDir: out(), lane: 'web-extract' });
+    assert.equal(p.data.redistributable, undefined, Object.keys(files).join(' '));
+  }
+});

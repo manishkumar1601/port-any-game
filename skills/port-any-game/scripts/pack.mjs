@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { sha256File, walk } from './lib/fsx.mjs';
 import { loadLock, resolveName, toolDir } from './setup.mjs';
-import { isPublicAllowed, PolicyError } from './policy.mjs';
+import { isPublicAllowed, PolicyError, RIGHTS } from './policy.mjs';
 import { LANES } from './lanes/index.mjs';
 import { normalizePath } from '../assets/shell/pure.js';
 
@@ -220,9 +220,7 @@ export async function pack(portDir, { mode, laneModule, lock, warn = () => {} } 
   const port = readPort(dir);
   mode ??= port.data?.mode ?? 'byo';
   if (!MODES.includes(mode)) throw new UsageError(`unknown data mode '${mode}' (one of ${MODES.join(', ')})`);
-  if (mode === 'bundled-public' && !isPublicAllowed(port)) {
-    throw new PolicyError('PUBLIC_BUNDLED', 'a bundled-public pack needs port.json data.mode "bundled-public" plus an ACK_RIGHTS_HOLDER acknowledgement or catalog-redistributable data. Ask the user; only they record rights with `pag ack`.');
-  }
+  if (mode === 'bundled-public' && !isPublicAllowed(port)) throw new PolicyError('PUBLIC_BUNDLED', `a bundled-public pack puts game files in a build meant for sharing. ${RIGHTS}`);
   const lane = laneModule ?? LANES[port.lane];
   if (!lane) throw new UsageError(`unknown lane '${port.lane}' in port.json`);
   if (lane.external) throw new Error(`${lane.id} routes to an existing web port; there is nothing to pack. Run \`pag build\` and follow its message.`);
@@ -265,6 +263,13 @@ export async function pack(portDir, { mode, laneModule, lock, warn = () => {} } 
     throw e;
   }
   try { rmrf(old); } catch (e) { warn(`could not remove the previous dist at ${old}: ${e.message}`); }
+  // R63: the rights gate passed, so the port is public from now on (pag writes port.json; the guard blocks the agent).
+  if (mode === 'bundled-public' && port.data?.mode !== 'bundled-public') {
+    const file = path.join(dir, 'port.json');
+    const tmp = `${file}.tmp-${process.pid}`;
+    writeFileSync(tmp, `${JSON.stringify({ ...port, data: { ...port.data, mode } }, null, 2)}\n`);
+    renameSync(tmp, file);
+  }
   return { distDir: dist, shell };
 }
 
