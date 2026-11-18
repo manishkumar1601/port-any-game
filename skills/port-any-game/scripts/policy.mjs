@@ -1,4 +1,4 @@
-// Single authoritative guardrail (spec §11). Every pag command and every agent hook calls it.
+// Single authoritative guardrail (spec §11), called by new/build/pack/serve, the static verify check and the agent hooks.
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
@@ -10,7 +10,7 @@ export class PolicyError extends Error {
 
 const ASK = 'Ask the user. Do not edit port.json yourself; the user records consent with `pag ack`.';
 // R63: the one way to public use. The agent asks openly and never words the statement (references/legal.md).
-export const RIGHTS = 'Ask the user. Do not edit port.json yourself. Public use needs the rights to the game data: only if the user says, in their own words, that they hold them, record exactly that with `pag ack ACK_RIGHTS_HOLDER --note "<their words>"` (free-to-share data from the catalog is marked by `pag new`).';
+export const RIGHTS = 'Ask the user. Do not edit port.json yourself. Public use needs the rights to the game data: only if the user says, in their own words, that they hold them, record exactly that with `pag ack ACK_RIGHTS_HOLDER --note=\'<their words>\'` (free-to-share data from the catalog is marked by `pag new`).';
 const PROTECTED = ['game', 'work', 'build', 'analysis', 'dist', 'extracted', 'recomp'];
 // Distinctive names are refused anywhere in a command; generic words only as command names or executable-like tokens.
 const DISTINCT_RE = /(?<![a-z0-9])(steamless|noceg|steam_?emu|smartsteamemu)(?![a-z0-9])/i;

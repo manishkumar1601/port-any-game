@@ -1,4 +1,4 @@
-// Lane registry. Tasks 16-19 add build/shell to the M1 modules; stubs stay descriptors.
+// Lane registry.
 import webExtract from './web-extract.mjs';
 import knownPort from './known-port.mjs';
 import rtRuffle from './rt-ruffle.mjs';

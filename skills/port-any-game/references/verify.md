@@ -16,7 +16,7 @@ once the user agreed to install it (`pag setup playwright`, see below). Then it:
 - Quick check while building: `node <skill-dir>/scripts/pag.mjs verify "<port>/dist" --soak 5`
 - The gate: `node <skill-dir>/scripts/pag.mjs verify "<port>/dist" --soak 120`
 - Options: `--headed` (show the browser window), `--runner cdp|playwright` (force one), `--fixture <folder>` (BYO:
-  import from another folder), `--json` (the full report on stdout). Without `--soak` it soaks 60 s.
+  import from another folder), `--browser chromium|firefox|webkit|all` (default chromium; the other two need Playwright's own build), `--query K=V&...` (extra URL query for the page), `--json` (the full report on stdout). Without `--soak` it soaks 60 s.
 
 The gate runs through the `port-verifier` subagent when your agent has it: it runs verify, reads the screenshots and
 reports, and never fixes anything. Without subagents, run it yourself and report just as plainly.
@@ -30,7 +30,7 @@ Always look at the screenshots before you tell the user it works.
 
 | Check | Passes when |
 |---|---|
-| `ready` | the page gets ready in time: a first load within 120 s, a reload within 30 s; a reload or first frame slower than the lane's budget (30 s for M1 lanes) warns |
+| `ready` | the page gets ready in time: a first load within 120 s, a reload within 30 s; the first load is only capped (120 s); a reload, or the first game frame after Play, slower than the budget warns (pack default 15 s; the M1 lanes set 30 s) |
 | `shell` | the page reaches "running", not an error |
 | `blank` | the picture is not near-black or flat (up to 3 of 10 blank samples, such as a fade, only warn) |
 | `frozen` | the picture changes; "static until input" only warns |

@@ -24,7 +24,7 @@ node <skill-dir>/scripts/pag.mjs <command> [arguments]
   before running them. Anything that downloads (`setup ... --yes`) still needs the size shown and the user's OK
   first (step 5).
 - Exit codes: 0 ok, 1 failed, 2 usage error, 4 refused by policy (explain it; never work around it).
-  `verify`: 0 pass, 1 fail, 2 warnings only, 3 unsupported environment.
+  `verify`: 0 pass, 1 fail or bad arguments, 2 warnings only, 3 unsupported environment.
 - Below, `<game>` is the user's game folder and `<port>` is the port folder made in step 5.
 
 ## Ground rules (always)

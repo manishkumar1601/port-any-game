@@ -1,4 +1,4 @@
-// `pag build [portDir]`: run the port's lane build step (lanes add build(portDir) in Tasks 16-18).
+// `pag build [portDir]`: run the port's lane build step.
 // Exit 0 ok, 1 failure or no build step, 2 usage, 4 policy refusal.
 import path from 'node:path';
 import { parseArgs } from 'node:util';

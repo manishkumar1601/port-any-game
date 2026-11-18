@@ -36,7 +36,7 @@ usually minutes.
 | Ctrl or Alt "do strange things" in the browser | Ctrl and Alt reach the game (fire, strafe), but browser shortcuts still work too: Ctrl+W closes the tab, Ctrl+R reloads | Tell the user. If the game uses Ctrl or Alt with letter keys, suggest changing those keys in the game's own setup. |
 | the mouse does nothing (or a gamepad does nothing) | the M1 DOS lane passes only keyboard input to DOSBox | Tell the user: DOS builds are keyboard only for now. Games that need a mouse cannot be played this way yet. |
 | the game runs too fast or too slow | DOSBox speed is fixed to `cycles=auto` in M1 | Report it; M1 cannot tune the speed. |
-| verify `frozen` fails on a still title screen | the game waits for a key; this lane declares no verify keys in M1 | Look at the screenshot. If the title is drawn correctly, say so and rely on the user's 2-minute check. |
+| verify `frozen` fails on a still title screen | the game waits for a key; the lane clicks the stage, then presses Enter and Space, and a title that needs another key still looks frozen | Look at the screenshot. If the title is drawn correctly, say so and rely on the user's 2-minute check. |
 
 ## Licence
 js-dos is GPL-2.0. The build carries `dist/LICENSES/js-dos.txt` with the full GPL-2.0 text and a link to the source.
