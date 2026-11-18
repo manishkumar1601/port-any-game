@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { newPort, run } from '../skills/port-any-game/scripts/new.mjs';
 import { LANES } from '../skills/port-any-game/scripts/lanes/index.mjs';
 import { PolicyError } from '../skills/port-any-game/scripts/policy.mjs';
@@ -98,7 +99,9 @@ test('catalog-redistributable data reaches port.json and unlocks a bundled-publi
   const port = await newPort({ gameDir: g, outDir: o, lane: 'web-extract' });
   assert.equal(port.data.redistributable, true);
   const msgs = { out: '', err: '' };
-  assert.equal(await pack([o, '--mode', 'bundled-public'], { out: (t) => (msgs.out += t), err: (t) => (msgs.err += t) }), 0, msgs.err);
+  // The lane is incidental (bundled-public is lane-independent, R29); web-extract itself would need its build first (M4).
+  const laneModule = { id: 'lane-test', dataModes: ['byo', 'bundled'], adapter: fileURLToPath(new URL('./fixtures/lane-test/adapter.js', import.meta.url)) };
+  assert.equal(await pack([o, '--mode', 'bundled-public'], { out: (t) => (msgs.out += t), err: (t) => (msgs.err += t) }, { laneModule }), 0, msgs.err);
   assert.equal(JSON.parse(readFileSync(path.join(o, 'port.json'), 'utf8')).data.mode, 'bundled-public');
   assert.deepEqual(readFileSync(path.join(o, 'dist', 'game', 'freedoom1.wad')), wad);
 
@@ -107,4 +110,42 @@ test('catalog-redistributable data reaches port.json and unlocks a bundled-publi
     const p = await newPort({ gameDir: game({ 'package.nw': 'PK', 'Game.exe': makePE(), ...files }), outDir: out(), lane: 'web-extract' });
     assert.equal(p.data.redistributable, undefined, Object.keys(files).join(' '));
   }
+});
+
+// M5: a title with no ASCII letters must not collapse every such port onto the id 'game' (one port number, one OPFS).
+test('non-ASCII titles get distinct ids', async () => {
+  const a = await newPort({ gameDir: nw('ゲーム'), outDir: out() });
+  const b = await newPort({ gameDir: nw('テスト'), outDir: out() });
+  assert.match(a.id, /^game-[0-9a-f]{8}$/);
+  assert.match(b.id, /^game-[0-9a-f]{8}$/);
+  assert.notEqual(a.id, b.id);
+  assert.equal(a.name, 'ゲーム');
+});
+
+// M21: a port inside the install (port.json, .git and builds in the user's game folder), the install inside the port, or
+// a port inside the skill folder is refused before anything is written.
+test('new refuses nested port and game folders, and ports inside the skill', async () => {
+  const g = nw();
+  const skill = fileURLToPath(new URL('../skills/port-any-game/', import.meta.url));
+  for (const o of [path.join(g, 'port'), g, path.join(skill, 'my-port')]) {
+    await assert.rejects(newPort({ gameDir: g, outDir: o }), /inside|same folder/, o);
+    assert.equal(existsSync(path.join(o, 'port.json')), false, o);
+  }
+  const outer = out();
+  const inner = path.join(outer, 'install');
+  mkdirSync(inner, { recursive: true });
+  for (const [rel, c] of Object.entries({ 'package.nw': 'PK', 'nw.pak': 'x', 'Game.exe': makePE() })) writeFileSync(path.join(inner, rel), c);
+  await assert.rejects(newPort({ gameDir: inner, outDir: outer }), /inside/);
+  assert.equal(existsSync(path.join(outer, 'port.json')), false);
+  const c = { out: '', err: '' };
+  assert.equal(await run([g, path.join(g, 'port')], { out: (t) => (c.out += t), err: (t) => (c.err += t) }), 2);
+});
+
+// M19: exit 2 is for usage only; an I/O failure is 1.
+test('new exits 2 for a game path that is not a folder, 1 for an I/O failure', async () => {
+  const quiet = { out() {}, err() {} };
+  const file = path.join(base, `file${n++}.txt`);
+  writeFileSync(file, 'x');
+  assert.equal(await run([file, out()], quiet), 2);
+  assert.equal(await run([nw(), path.join(file, 'port')], quiet), 1, 'the port folder cannot be created under a file');
 });

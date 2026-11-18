@@ -403,6 +403,19 @@ test('pack prefers build/game, copies only listed runtime files, needs_coi follo
   assert.ok(statSync(path.join(distDir, 'LICENSES', 'fake-rt.txt')).size > 0);
 });
 
+// M4: a lane whose build extracts the game (web-extract) never packs the raw install instead.
+test('a lane that requires its build refuses to pack without build/game', async () => {
+  const { dir } = makePort();
+  const needs = lane({ requiresBuild: true });
+  const c = io();
+  assert.equal(await run([dir, '--mode', 'bundled'], c.io, { lock: LOCK, laneModule: needs }), 1);
+  assert.match(c.o.err, /run `?pag build/);
+  assert.ok(!existsSync(path.join(dir, 'dist')));
+  mkdirSync(path.join(dir, 'build', 'game'), { recursive: true });
+  writeFileSync(path.join(dir, 'build', 'game', 'index.html'), '<p>built</p>');
+  assert.equal((await pack(dir, opts({ laneModule: needs, mode: 'bundled' }))).shell.data.mode, 'bundled');
+});
+
 test('pag build dispatches to the lane build or explains it has none', async () => {
   const p = makePort();
   let c = io();

@@ -48,6 +48,8 @@ for (const [variant, label, engine] of [['nwjs', 'NW.js', 'nwjs'], ['electron', 
   });
 }
 
+test('web-extract packs only what its build extracted (M4)', () => assert.equal(lane.requiresBuild, true));
+
 test('detect NO without a web engine', () => assert.equal(lane.detect({ engines: [{ id: 'unity' }] }).verdict, 'NO'));
 
 test('build extracts entry and reports node-api uses', async () => {

@@ -152,6 +152,10 @@ test('assertTarget lan without password throws', () => {
   assert.throws(() => assertTarget({ data: { mode: 'bundled-public' } }, 'public'), (e) => e.code === 'PUBLIC_BUNDLED');
   assertTarget({ data: { mode: 'bundled-public' }, acks: [{ id: 'ACK_RIGHTS_HOLDER', at: 'x' }] }, 'public');
   assertTarget({ data: { mode: 'bundled-public', redistributable: true } }, 'public');
+  // M7: serving a port beyond 127.0.0.1 also needs the user's recorded OK (spec §11 Warn).
+  const port = { id: 'g', data: { mode: 'byo' }, acks: [] };
+  assert.throws(() => assertTarget(port, 'lan', { password: 'x' }), (e) => e.code === 'LAN_NO_ACK' && /pag ack ACK_WARN_BEYOND_LOOPBACK/.test(e.message));
+  assertTarget({ ...port, acks: [{ id: 'ACK_WARN_BEYOND_LOOPBACK', at: '2026-11-18T00:00:00Z' }] }, 'lan', { password: 'x' });
 });
 
 const git = (cwd, ...a) => spawnSync('git', a, { cwd, encoding: 'utf8' });

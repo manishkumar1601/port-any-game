@@ -58,6 +58,8 @@ const server = http.createServer((req, res) => {
     res.statusCode = status;
     if (body?.pipe) body.pipe(res); else res.end(body);
   };
+  // DNS rebinding: answer only to this server's own loopback names (like serve.mjs).
+  if (![`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`].includes(String(req.headers.host ?? '').toLowerCase())) return send(421);
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(405, { Allow: 'GET, HEAD' });
   const r = resolve(pathname);
   if (!r.file) return send(r.status);

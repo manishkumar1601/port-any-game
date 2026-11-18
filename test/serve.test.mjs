@@ -39,6 +39,20 @@ test('binds 127.0.0.1 by default', async () => serving({}, async (url) => {
   assert.equal(await r.text(), '<h1>hi</h1>');
 }));
 
+// M6: loopback serving answers 421 to any Host but this server's own loopback names (DNS rebinding); --lan does not.
+const hostStatus = (url, host) => new Promise((resolve, reject) => {
+  const u = new URL(url);
+  http.get({ host: u.hostname, port: u.port, path: '/', headers: { Host: host } }, (r) => { r.resume(); resolve(r.statusCode); }).on('error', reject);
+});
+test('loopback serving refuses a foreign Host header with 421', async () => serving({}, async (url) => {
+  const p = Number(new URL(url).port);
+  assert.equal(await hostStatus(url, `evil.example:${p}`), 421);
+  assert.equal(await hostStatus(url, `127.0.0.1:${p + 1}`), 421, 'another port');
+  for (const h of [`127.0.0.1:${p}`, `localhost:${p}`, `LocalHost:${p}`, `[::1]:${p}`]) assert.equal(await hostStatus(url, h), 200, h);
+  const lan = await startServer({ root, host: '0.0.0.0', log: () => {} });
+  try { assert.equal(await hostStatus(lan.url, 'my-pc.local'), 200, 'a LAN server is reached by other names'); } finally { await lan.close(); }
+}));
+
 test('parseHeadersFile reads Netlify format', () => {
   assert.deepEqual(parseHeadersFile('# c\n/*\n  A: 1\n  B: x:y\n/p\n  C: 2\n'), [
     { pattern: '/*', headers: { A: '1', B: 'x:y' } }, { pattern: '/p', headers: { C: '2' } }]);

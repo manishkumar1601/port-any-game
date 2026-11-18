@@ -115,9 +115,9 @@ test('lane-test silent warns audio', { skip }, async () => {
   assert.equal(r.status, 'warn', failing(r));
 });
 
-// One run for these: lane-test with a too-wide element, a POST and a popup window at start.
+// One run for these: lane-test with a too-wide element, a POST, a popup window and an uncaught page error at start.
 let misbehaving;
-const misbehave = () => (misbehaving ??= verifyMode('mode=ok&wide=1&post=1&popup=1'));
+const misbehave = () => (misbehaving ??= verifyMode('mode=ok&wide=1&post=1&popup=1&pageerror=1'));
 
 test('mobile viewport overflow fails', { skip }, async () => {
   const { r } = await misbehave();
@@ -126,6 +126,15 @@ test('mobile viewport overflow fails', { skip }, async () => {
   assert.equal(c.status, 'fail', failing(r));
   assert.match(c.detail, /mobile 390x844/);
   assert.doesNotMatch(c.detail, /desktop/);
+});
+
+// M2: a page error while the game keeps running is reported (errors fails) but does not end the session.
+test('a page error while running is logged, not fatal', { skip }, async () => {
+  const { r } = await misbehave();
+  assert.equal(check(r, 'errors').status, 'fail', failing(r));
+  assert.match(check(r, 'errors').detail, /lane-test: page error while running/);
+  assert.equal(check(r, 'shell').status, 'pass', failing(r));
+  assert.equal(check(r, 'fps').status, 'pass', failing(r));
 });
 
 test('byo privacy: POST fails', { skip }, async () => {

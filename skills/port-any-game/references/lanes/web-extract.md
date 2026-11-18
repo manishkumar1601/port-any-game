@@ -33,6 +33,7 @@ Every `pag build` deletes and recreates `<port>/build/game/`, so never hand-edit
 | What you see | Cause | Fix |
 |---|---|---|
 | build: "no web content found" | none of the five layouts above | Check `<game>` is the installed game, not its installer. If the game is another engine, re-run the survey; this lane does not fit. |
+| pack: "there is no build/game yet" | `pag build` has not run (or failed) | Run step 1, then pack again. |
 | build: "no entry HTML found" | `package.json` `main` is not an html file inside the game, and there is no `index.html` | Report it. M1 cannot choose a different entry page. |
 | build `verdict: "HARD"`, `nodeApiUses` lists files and lines | the game calls desktop-only features (local files, Steam) that browsers lack | M1 has no stand-ins ("shims") for these. Run verify anyway: many games only call them behind a desktop check. If verify shows errors or a blank screen at those calls, tell the user the game needs shims that come in a later version. |
 | `package.json` `main` is another page, such as `start.html` | normal for NW.js games | Nothing to do. Build turns `index.html` into a redirect to it and keeps the original as `__pag_index_orig.html`. |

@@ -4,7 +4,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { normalizePath, matchManifest, Sha256, fileHasher, parseVerifyParams, readStoredZip, importLayout, fixtureIndexUrl } from '../../skills/port-any-game/assets/shell/pure.js';
+import { normalizePath, matchManifest, Sha256, fileHasher, parseVerifyParams, readStoredZip, importLayout, fixtureIndexUrl, stallWatch } from '../../skills/port-any-game/assets/shell/pure.js';
 import { importFiles } from '../../skills/port-any-game/assets/shell/import.js';
 import { createZip } from '../../skills/port-any-game/assets/shell/zip.js';
 import { sha256File } from '../../skills/port-any-game/scripts/lib/fsx.mjs';
@@ -185,4 +185,20 @@ test('browser modules import cleanly without a DOM', async () => {
   const lane = (await import('../fixtures/lane-test/adapter.js')).default;
   assert.equal(lane.id, 'lane-test');
   for (const k of ['start', 'pause', 'resume', 'frameCounter']) assert.equal(typeof lane[k], 'function', k);
+});
+
+// M2: a page error while the game runs is not fatal unless the game loop stops after it.
+test('stallWatch escalates a page error only when no game frame follows', () => {
+  const w = stallWatch(3000);
+  assert.equal(w.tick(5, 0), null, 'nothing pending');
+  w.error('e1', 5, 1000);
+  w.error('e2', 5, 1500); // the first error is the one reported
+  assert.equal(w.tick(5, 3999), null, 'not stalled yet');
+  assert.equal(w.tick(6, 4100), null, 'a new frame clears it');
+  assert.equal(w.tick(6, 9000), null);
+  w.error('e3', 6, 10000);
+  w.resume(20000); // time paused (tab hidden) does not count
+  assert.equal(w.tick(6, 22000), null);
+  assert.equal(w.tick(6, 23001), 'e3', 'the loop stopped: fatal now');
+  assert.equal(w.tick(6, 30000), null, 'reported once');
 });

@@ -106,7 +106,7 @@ function countCaseFixes(out, files) {
 }
 
 export default {
-  id: 'web-extract', rung: 0, available: true, milestone: 'M1', dataModes: ['bundled'],
+  id: 'web-extract', rung: 0, available: true, milestone: 'M1', dataModes: ['bundled'], requiresBuild: true, // M4
   acks: ['ACK_PRIVATE_USE_ONLY'], odds: '85-95%',
   checklist: ['Extract package.nw / app.asar / www into build/game', 'Find the entry HTML', 'Map path case', 'Scan for Node and Steamworks API use', 'Serve and verify the first frame'],
   // R38: the survey carries no full file list, so an engine hit is GO; build() validates the entry and fails clearly without one.

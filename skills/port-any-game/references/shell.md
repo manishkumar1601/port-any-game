@@ -31,7 +31,7 @@ Data modes:
 
 ## Another device at home
 - Ask first, with the `ACK_WARN_BEYOND_LOOPBACK` question ([legal](legal.md)), and record the yes with `pag ack`:
-  this makes the game reachable from the home network.
+  this makes the game reachable from the home network. serve refuses `--lan` without it (exit 4).
 - A password is required. Ask the user to choose a new one used for nothing else. pag reads it from the environment
   variable named by `--password-env`, set in the same shell that runs serve:
   - sh/bash: `PAG_PASSWORD='<password>' node <skill-dir>/scripts/pag.mjs serve "<port>/dist" --lan --password-env PAG_PASSWORD`

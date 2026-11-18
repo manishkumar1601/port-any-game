@@ -239,6 +239,8 @@ export async function pack(portDir, { mode, laneModule, lock, warn = () => {} } 
   }
   const runtime = await runtimeFiles(lane, adapter, tool);
   const source = isDir(path.join(dir, 'build', 'game')) ? 'build/game' : 'game';
+  // M4: such a lane's game is what its build extracted; the raw install (maybe GBs) would not play.
+  if (lane.requiresBuild && source !== 'build/game') throw new Error(`lane ${lane.id} packs what its build extracted, and there is no build/game yet: run \`pag build\` first`);
   if (!isDir(path.join(dir, source))) throw new Error('no game files: the game/ folder is missing (pag new links it to your install)');
   const files = await gameFiles(path.join(dir, ...source.split('/')), warn);
 

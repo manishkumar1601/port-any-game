@@ -10,6 +10,7 @@
 //   &wide=1  adds a 1000 px wide strip: overflows a phone viewport, not a desktop one
 //   &post=1  sends one same-origin POST with a body at start (a BYO privacy violation)
 //   &popup=1 opens a popup window at start (its requests would escape the privacy check)
+//   &pageerror=1 throws one uncaught error from a timer 1 s after start; the loop keeps running (M2)
 const W = 640;
 const H = 480;
 const STEP = { ArrowLeft: [-16, 0], ArrowRight: [16, 0], ArrowUp: [0, -16], ArrowDown: [0, 16] };
@@ -37,6 +38,7 @@ export default {
     if (q.get('wide') === '1') document.body.append(Object.assign(document.createElement('div'), { style: 'position:absolute;top:0;left:0;width:1000px;height:1px' }));
     if (q.get('popup') === '1') window.open('about:blank', '_blank');
     if (q.get('post') === '1') await fetch('./', { method: 'POST', body: 'lane-test' }).catch(() => {});
+    if (q.get('pageerror') === '1') setTimeout(() => { throw new Error('lane-test: page error while running'); }, 1000);
     const [first] = ctx.files.list();
     if (first) await ctx.files.read(first); // exercises the shell's data path (OPFS for byo, HTTP for bundled)
     const canvas = Object.assign(document.createElement('canvas'), { width: W, height: H });

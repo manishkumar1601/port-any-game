@@ -353,7 +353,14 @@ export function assertLaneAllowed(survey, laneId) {
 
 export function assertTarget(port, target, { password } = {}) {
   if (target === 'local') return;
-  if (target === 'lan') { if (!password) throw new PolicyError('LAN_NO_PASSWORD', 'serving beyond 127.0.0.1 needs a password (--password-env VAR).'); return; }
+  if (target === 'lan') {
+    if (!password) throw new PolicyError('LAN_NO_PASSWORD', 'serving beyond 127.0.0.1 needs a password (--password-env VAR).');
+    // M7: spec §11 Warn item, checked here because the port is at hand (a folder outside any port needs the password only).
+    if (port?.id && !(port.acks ?? []).some((a) => a?.id === 'ACK_WARN_BEYOND_LOOPBACK' && a.at)) {
+      throw new PolicyError('LAN_NO_ACK', `serving this port beyond 127.0.0.1 needs the user's OK first: ask them the ACK_WARN_BEYOND_LOOPBACK question (references/legal.md), and only after a yes run \`pag ack ACK_WARN_BEYOND_LOOPBACK\`. ${ASK}`);
+    }
+    return;
+  }
   if (target === 'public') {
     if (!isPublicAllowed(port)) throw new PolicyError('PUBLIC_BUNDLED', `a public target needs game data the user holds the rights to. ${RIGHTS}`);
     return;

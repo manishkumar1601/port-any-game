@@ -12,7 +12,8 @@ export default {
     if (!head.ok) throw new Error(`could not load ${entry} (HTTP ${head.status})`);
     audio = ctx.audio.context;
     window.__pagFrame = (n) => { if (running) { frames = n; ctx.reportFrame(); } };
-    window.__pagError = (e) => ctx.reportError(e instanceof Error ? e : new Error(String(e)));
+    // M2: the game's own uncaught errors are page errors (fatal only if its loop stops), not lane failures.
+    window.__pagError = (e) => (ctx.reportPageError ?? ctx.reportError)(e instanceof Error ? e : new Error(String(e)));
     const f = document.createElement('iframe');
     f.style.cssText = 'width:100%;height:100%;border:0;display:block;background:#000';
     f.setAttribute('allow', 'autoplay; gamepad; fullscreen');

@@ -1,8 +1,9 @@
 // port-any-game web shell: lifecycle, capability checks, BYO import, Play, window.__shell. Every lane runs inside it.
 // No-black-screen rules (spec §8): readyState-safe boot; a live placeholder under the Play overlay; the adapter's
-// start() and every shell frame run in try/catch -> reportError (uncaught page errors are routed there too);
+// start() and every shell frame run in try/catch -> reportError (uncaught page errors too, but while the game runs only
+// once its loop stops: M2);
 // fixed layer order (shell.css). No network beyond same-origin GETs of this build's own files.
-import { normalizePath, pathLookup, parseVerifyParams } from './pure.js';
+import { normalizePath, pathLookup, parseVerifyParams, stallWatch } from './pure.js';
 import * as storage from './storage.js';
 import { fromDataTransfer, fromDirectoryHandle, fromFileList, fromFixture, importFiles, missingFiles, opfsFiles } from './import.js';
 import { installInput } from './input.js';
@@ -48,6 +49,16 @@ function reportError(err, where = 'lane') {
 }
 
 const reportFrame = () => { stats.gameFrames++; };
+
+// M2: while the game runs, an uncaught page (or game iframe) error is logged and kept in stats.lastError; it turns into
+// the error screen only if the game loop stops after it. Before Play it is fatal as always.
+const stall = stallWatch();
+function pageError(err) {
+  if (state !== 'running' && state !== 'paused') return reportError(err, 'page');
+  stats.lastError = String(err?.stack || err?.message || err);
+  console.error('[shell] page error (the game keeps running):', err);
+  stall.error(err, stats.gameFrames, performance.now());
+}
 
 function missingCapabilities(req = {}, needsCoi = false, byo = false) {
   const missing = [];
@@ -147,7 +158,7 @@ async function play() {
     window.__shell.lane = lane;
     placeholder?.remove();
     placeholder = null;
-    await lane.start({ host: $('host'), files, audio: { context: audio }, reportFrame, reportError, config });
+    await lane.start({ host: $('host'), files, audio: { context: audio }, reportFrame, reportError, reportPageError: pageError, config });
     if (state === 'ready') setState('running', '');
   } catch (e) { reportError(e, 'start'); }
 }
@@ -177,6 +188,8 @@ function tick() {
       const n = lane.frameCounter();
       if (Number.isFinite(n) && n > stats.gameFrames) stats.gameFrames = n;
     }
+    const stopped = state === 'running' && stall.tick(stats.gameFrames, performance.now());
+    if (stopped) reportError(stopped, 'page');
   } catch (e) { reportError(e, 'frame'); }
 }
 
@@ -203,8 +216,8 @@ async function boot() {
   };
   Object.defineProperty(api, 'state', { get: () => state, enumerable: true });
   window.__shell = api;
-  window.addEventListener('error', (e) => reportError(e.error ?? e.message, 'page'));
-  window.addEventListener('unhandledrejection', (e) => reportError(e.reason, 'page'));
+  window.addEventListener('error', (e) => pageError(e.error ?? e.message));
+  window.addEventListener('unhandledrejection', (e) => pageError(e.reason));
   installAudioTap();
   input = installInput(api);
   try {
@@ -229,7 +242,7 @@ async function boot() {
   });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && state === 'running') { callLane('pause'); if (state === 'running') setState('paused', 'Paused.'); }
-    else if (!document.hidden && state === 'paused') { callLane('resume'); if (state === 'paused') setState('running', ''); }
+    else if (!document.hidden && state === 'paused') { stall.resume(performance.now()); callLane('resume'); if (state === 'paused') setState('running', ''); }
   });
 
   setState('checking', 'Checking this browser…');

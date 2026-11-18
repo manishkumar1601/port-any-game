@@ -193,3 +193,22 @@ export function readStoredZip(u8) {
   }
   return out;
 }
+
+// M2: an uncaught page error while the game runs is logged, not fatal (a plugin's exception need not end a playable
+// session). error() remembers the first one; tick() returns it once no game frame has followed for stallMs (the loop
+// stopped), else null. resume() restarts the clock after a pause.
+export function stallWatch(stallMs = 3000) {
+  let pending = null;
+  return {
+    error(err, frames, now) { pending ??= { err, frames, at: now }; },
+    tick(frames, now) {
+      if (!pending) return null;
+      if (frames > pending.frames) { pending = null; return null; }
+      if (now - pending.at <= stallMs) return null;
+      const { err } = pending;
+      pending = null;
+      return err;
+    },
+    resume(now) { if (pending) pending.at = now; },
+  };
+}

@@ -72,6 +72,7 @@ function resolve(base, rawPath, caseFallback, log) {
 }
 
 const FIXTURE_INDEX = fixtureIndexUrl('/__fixture/');
+export const loopbackHost = (h, port) => [`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`].includes(String(h ?? '').toLowerCase());
 const sha = (s) => crypto.createHash('sha256').update(String(s)).digest();
 
 // fixtureIndex (verify, R31/R34): served beside the mount at /__fixture.index.json, so verify never writes an index
@@ -79,6 +80,7 @@ const sha = (s) => crypto.createHash('sha256').update(String(s)).digest();
 export function startServer({ root, host = '127.0.0.1', port = 0, password, fixtureDir, fixtureIndex, caseFallback = false, log = (m) => process.stderr.write(`${m}\n`) }) {
   const base = path.resolve(root);
   const fixture = fixtureDir && path.resolve(fixtureDir);
+  const loopback = host !== '0.0.0.0';
   const rules = [];
   try { for (const r of parseHeadersFile(readFileSync(path.join(base, '_headers'), 'utf8'), log)) rules.push({ re: patternRe(r.pattern), headers: r.headers }); } catch { /* none */ }
 
@@ -91,6 +93,8 @@ export function startServer({ root, host = '127.0.0.1', port = 0, password, fixt
       res.statusCode = status;
       if (body?.pipe) body.pipe(res); else res.end(body);
     };
+    // M6: DNS rebinding. A loopback server answers only to its own loopback names (the stable ports are predictable).
+    if (loopback && !loopbackHost(req.headers.host, server.address()?.port)) return send(421);
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(405, { Allow: 'GET, HEAD' });
     if (password) {
       const m = /^Basic (.+)$/i.exec(req.headers.authorization || '');
@@ -179,7 +183,7 @@ export async function run(argv, io = { out: (t) => process.stdout.write(t), err:
   try { srv = await startServer({ root, host: values.lan ? '0.0.0.0' : '127.0.0.1', port, password, caseFallback, log: (m) => io.err(`${m}\n`) }); }
   catch (e) {
     if (e.code === 'EADDRINUSE') { io.err(`pag serve: port ${port} is in use (another copy of this game may already be running); pass --port\n`); return 1; }
-    io.err(`pag serve: ${e.message}\n`); return 2;
+    io.err(`pag serve: ${e.message}\n`); return 1; // M19: a failure, not a usage error
   }
   io.out(`${srv.url}\n`);
   if (values.open) {

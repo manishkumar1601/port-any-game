@@ -35,7 +35,7 @@ function makePort({ mode = 'byo', coi = true, lane = 'lane-test', dist = true, c
 }
 const freePort = () => new Promise((r) => { const s = net.createServer().listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => r(port)); }); });
 // fetch() normalises dot segments before sending, so traversal needs a raw request.
-const rawStatus = (port, p) => new Promise((res, rej) => http.get({ host: '127.0.0.1', port, path: p }, (r) => { r.resume(); res(r.statusCode); }).on('error', rej));
+const rawStatus = (port, p, headers = {}) => new Promise((res, rej) => http.get({ host: '127.0.0.1', port, path: p, headers }, (r) => { r.resume(); res(r.statusCode); }).on('error', rej));
 const io = () => { const o = { out: '', err: '' }; return { o, io: { out: (t) => (o.out += t), err: (t) => (o.err += t) } }; };
 
 test('stablePort is deterministic and in range', () => {
@@ -130,6 +130,9 @@ test('serve-standalone serves with COOP/COEP, noindex, Range, and refuses traver
     assert.equal(await rawStatus(port, '/%2e%2e/launch.json'), 400, 'traversal');
     assert.equal(await rawStatus(port, '/..%5Claunch.json'), 400, 'backslash traversal');
     assert.equal((await fetch(u + '/launch.json')).status, 404, 'only dist/ is served');
+    // M6: DNS rebinding: a page on another name that resolves to 127.0.0.1 gets 421.
+    assert.equal(await rawStatus(port, '/', { Host: `evil.example:${port}` }), 421);
+    assert.equal(await rawStatus(port, '/', { Host: `localhost:${port}` }), 200);
   } finally { l.child.kill(); }
 });
 
