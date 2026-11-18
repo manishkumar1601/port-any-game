@@ -23,6 +23,61 @@
     "license": "GPL-2.0",
     "source": "https://github.com/caiiiycuk/js-dos"
   },
+  "easyrpg-player-js": {
+    "name": "easyrpg-player-js",
+    "version": "0.8.1.1",
+    "url": "https://easyrpg.org/downloads/player/0.8.1.1/easyrpg-player-0.8.1.1-js.tar.gz",
+    "sha256": "99b6963c943bb355e1b1221125cb4536ca2f627c329d8a89cee5a928cdd6a14f",
+    "size": 3619705,
+    "archive": "tgz",
+    "strip": 1,
+    "license": "GPL-3.0-or-later",
+    "licenseFile": "COPYING",
+    "source": "https://github.com/EasyRPG/Player",
+    "extras": [
+      {
+        "url": "https://raw.githubusercontent.com/EasyRPG/Player/0.8.1.1/COPYING",
+        "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+        "size": 35147,
+        "archive": "file",
+        "into": "COPYING"
+      }
+    ]
+  },
+  "love.js": {
+    "name": "love.js",
+    "version": "11.4.1",
+    "url": "https://registry.npmjs.org/love.js/-/love.js-11.4.1.tgz",
+    "sha256": "9eb2db1f789254faed8e5cf7eeeded46a7e56ecbc931c88be809526c448d25fb",
+    "size": 6560275,
+    "archive": "tgz",
+    "strip": 1,
+    "license": "MIT",
+    "licenseFile": "LICENSE",
+    "source": "https://github.com/Davidobot/love.js"
+  },
+  "renpy": {
+    "name": "renpy",
+    "version": "8.6.1",
+    "url": "https://www.renpy.org/dl/8.6.1/renpy-8.6.1-sdk.zip",
+    "sha256": "596c31be88b351de64166276708278a70f24e833be7181e7c37b8c106a0f0fdb",
+    "size": 163957166,
+    "archive": "zip",
+    "strip": 1,
+    "unpackedSize": 416000000,
+    "license": "MIT AND LGPL-2.1-or-later",
+    "licenseFile": "LICENSE.txt",
+    "source": "https://github.com/renpy/renpy",
+    "extras": [
+      {
+        "url": "https://www.renpy.org/dl/8.6.1/renpy-8.6.1-web.zip",
+        "sha256": "8e77b88df5ab00c8ad66e02222aed24de91888dca77410cd2fbdd161dc55fad0",
+        "size": 13288022,
+        "archive": "zip",
+        "into": "."
+      }
+    ]
+  },
   "playwright": {
     "name": "playwright",
     "version": "1.65.1",

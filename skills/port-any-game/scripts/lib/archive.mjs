@@ -3,7 +3,7 @@ import path from 'node:path';
 import { gunzipSync, inflateRawSync } from 'node:zlib';
 
 // Resolve an archive entry name under destDir; reject anything that escapes it (zip-slip).
-function safeJoin(destDir, name) {
+export function safeJoin(destDir, name) {
   const root = path.resolve(destDir);
   const target = path.resolve(root, ...name.split('/'));
   if (path.isAbsolute(name) || /^[a-zA-Z]:/.test(name) || (target !== root && !target.startsWith(root + path.sep))) {
@@ -57,13 +57,14 @@ export function listZip(buf) {
 }
 
 // Returns the relative forward-slash names of the files written.
-export async function extractZip(zipPath, destDir) {
+export async function extractZip(zipPath, destDir, { strip = 0 } = {}) {
   const buf = readFileSync(zipPath);
-  const entries = listZip(buf);
-  for (const e of entries) safeJoin(destDir, e.name); // validate everything before writing anything
+  const entries = listZip(buf).map((e) => ({ ...e, rel: strip ? e.name.split('/').filter(Boolean).slice(strip).join('/') + (e.name.endsWith('/') ? '/' : '') : e.name }));
+  for (const e of entries) if (e.rel && e.rel !== '/') safeJoin(destDir, e.rel); // validate everything before writing anything
   const written = [];
   for (const e of entries) {
-    const target = safeJoin(destDir, e.name);
+    if (!e.rel || e.rel === '/') continue;
+    const target = safeJoin(destDir, e.rel);
     if (e.name.endsWith('/')) { mkdirSync(target, { recursive: true }); continue; }
     const start = e.offset + 30 + buf.readUInt16LE(e.offset + 26) + buf.readUInt16LE(e.offset + 28);
     const raw = buf.subarray(start, start + e.csize);
@@ -72,7 +73,7 @@ export async function extractZip(zipPath, destDir) {
     else if (e.method === 8) data = inflateRawSync(raw, { maxOutputLength: Math.max(e.size, 1) }); // zip bomb guard: never more than the declared size
     else throw new Error(`unsupported zip method ${e.method} for ${e.name}`);
     writeOut(target, data, (e.attr >>> 16) & 0o111 ? (e.attr >>> 16) : 0);
-    written.push(e.name);
+    written.push(e.rel);
   }
   return written;
 }

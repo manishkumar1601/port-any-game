@@ -4,7 +4,8 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
-import { extractTarGz, readAsar, extractAsar } from '../../skills/port-any-game/scripts/lib/archive.mjs';
+import { createZip } from '../../skills/port-any-game/assets/shell/zip.js';
+import { extractTarGz, extractZip, readAsar, extractAsar } from '../../skills/port-any-game/scripts/lib/archive.mjs';
 import { makeAsar } from '../fixtures/make-asar.mjs';
 
 function tarEntry(name, body) {
@@ -69,4 +70,25 @@ test('readAsar reads a file from asar built by test/fixtures/make-asar.mjs', asy
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('extractZip strips leading segments', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'pag-zip-'));
+  try {
+    const enc = (t) => new TextEncoder().encode(t);
+    const zf = path.join(dir, 'a.zip');
+    writeFileSync(zf, createZip([{ name: 'top/a.txt', data: enc('A') }, { name: 'top/sub/b.txt', data: enc('B') }]));
+    const out = path.join(dir, 'out');
+    assert.deepEqual((await extractZip(zf, out, { strip: 1 })).sort(), ['a.txt', 'sub/b.txt']);
+    assert.equal(readFileSync(path.join(out, 'sub', 'b.txt'), 'utf8'), 'B');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('extractZip strip still rejects escapes', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'pag-zip-'));
+  try {
+    const zf = path.join(dir, 'a.zip');
+    writeFileSync(zf, createZip([{ name: 'top/../../x', data: new TextEncoder().encode('X') }]));
+    await assert.rejects(extractZip(zf, path.join(dir, 'out'), { strip: 1 }), /archive entry escapes destination/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

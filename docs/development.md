@@ -30,7 +30,7 @@ skills/port-any-game/
     survey/ lanes/ verify/ lib/    survey engine, lane modules, verify tiers, fs/archive helpers
     rules/                 engines.json, protection.json, apis.json (+ NOTICE.md)
     policy.mjs, policy-domains.json, guard.mjs, ack.mjs        defence layers
-    toolchain.lock.json    pinned runtime tools (Ruffle, js-dos, Playwright) with sha256
+    toolchain.lock.json    pinned runtime tools (Ruffle, js-dos, EasyRPG, love.js, Ren'Py, Playwright) with sha256 and optional `extras`
   assets/                shell/, launchers/, lanes/, project/, licenses/: files copied into ports
   catalog/               games.json (known ports) + SOURCES.md
   agents/openai.yaml     Codex/OpenAI skill metadata

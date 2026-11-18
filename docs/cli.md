@@ -254,7 +254,7 @@ Installs a pinned lane runtime into `<cache>/tools/<name>-<version>/`. Never dow
 Module: [setup.mjs](../skills/port-any-game/scripts/setup.mjs).
 
 ```
-pag setup <core|ruffle|jsdos|playwright> [--yes]
+pag setup <core|ruffle|jsdos|easyrpg|love|renpy|playwright> [--yes]
 ```
 
 | Target | Installs |
@@ -262,13 +262,16 @@ pag setup <core|ruffle|jsdos|playwright> [--yes]
 | `core` | nothing; creates the cache dir |
 | `ruffle` | Ruffle self-hosted build (lane `rt-ruffle`) |
 | `jsdos` | js-dos (lane `dos-jsdos`) |
+| `easyrpg` | EasyRPG Player web build plus its GPL text |
+| `love` | love.js packager |
+| `renpy` | Ren'Py SDK plus web support files, about 416 MB on disk |
 | `playwright` | npm package plus Chromium into `<cache>/ms-playwright` (several hundred MB) |
 
-Without `--yes` it prints what it would download and exits 0. Downloads resume from `<file>.part` (HTTP Range), abort after 60 s without data, check SHA-256 before extracting, extract to a temp dir, rename into place, and write `.ok` last. An already installed tool is a no-op.
+Without `--yes` it prints what it would download and exits 0. A lock entry may list `extras` (`{url, sha256, size, archive: zip|tgz|file, strip?, into}`) that are downloaded, hash-checked and extracted into the same tool dir; `unpackedSize` is shown as the disk size. Downloads resume from `<file>.part` (HTTP Range), abort after 60 s without data, check SHA-256 before extracting, extract to a temp dir, rename into place, and write `.ok` last. An already installed tool is a no-op.
 
 - **Reads:** `toolchain.lock.json`. **Writes:** `<cache>/downloads/`, `<cache>/tools/`.
 - **Exit:** 0 ok or dry run; 1 download, hash or install failure; 2 unknown target.
-- **Errors:** `usage: pag setup <core|ruffle|jsdos|playwright> [--yes]`; `sha256 mismatch for <name>: expected ..., got ...`; `download stalled: no data for 60 s ...` (run the same command again to resume); `download failed: HTTP <n> ...`.
+- **Errors:** `usage: pag setup <core|ruffle|jsdos|easyrpg|love|renpy|playwright> [--yes]`; `sha256 mismatch for <name>: expected ..., got ...`; `download stalled: no data for 60 s ...` (run the same command again to resume); `download failed: HTTP <n> ...`.
 
 ```
 node <skill dir>/scripts/pag.mjs setup ruffle --yes

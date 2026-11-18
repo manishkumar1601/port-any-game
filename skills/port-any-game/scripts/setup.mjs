@@ -1,17 +1,17 @@
-// pag setup <core|ruffle|jsdos|playwright> [--yes]: install pinned lane runtimes into <cacheDir>/tools.
+// pag setup <core|ruffle|jsdos|easyrpg|love|renpy|playwright> [--yes]: install pinned lane runtimes into <cacheDir>/tools.
 // Never downloads without --yes. Download resumes <file>.part (HTTP Range), verifies SHA-256 BEFORE extracting,
 // extracts into a temp dir, renames into place, writes .ok last.
 import { createHash } from 'node:crypto';
-import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { cacheDir } from './lib/fsx.mjs';
-import { extractTarGz, extractZip } from './lib/archive.mjs';
+import { extractTarGz, extractZip, safeJoin } from './lib/archive.mjs';
 
-const ALIASES = { ruffle: 'ruffle-selfhosted', jsdos: 'js-dos' };
+const ALIASES = { ruffle: 'ruffle-selfhosted', jsdos: 'js-dos', easyrpg: 'easyrpg-player-js', love: 'love.js', renpy: 'renpy' };
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 export function loadLock(file = path.join(here, 'toolchain.lock.json')) {
@@ -84,19 +84,32 @@ export async function ensureTool(name, { lock = loadLock(), run = defaultRun, st
     return dir;
   }
 
-  const part = path.join(cacheDir(), 'downloads', `${e.name}-${e.version}.${e.archive}.part`);
-  await download(e, part, stallMs);
-  const got = await sha256File(part);
-  if (got !== e.sha256) {
-    rmSync(part, { force: true }); // bad bytes must not be resumed
-    throw new Error(`sha256 mismatch for ${e.name}: expected ${e.sha256}, got ${got}`);
+  const downloads = path.join(cacheDir(), 'downloads');
+  const items = [
+    { ...e, part: path.join(downloads, `${e.name}-${e.version}.${e.archive}.part`) },
+    ...(e.extras ?? []).map((x, i) => ({ ...x, part: path.join(downloads, `${e.name}-${e.version}.x${i}.${x.archive}.part`) })),
+  ];
+  for (const it of items) {
+    await download(it, it.part, stallMs);
+    const got = await sha256File(it.part);
+    if (got !== it.sha256) {
+      rmSync(it.part, { force: true }); // bad bytes must not be resumed
+      throw new Error(`sha256 mismatch for ${e.name}: expected ${it.sha256}, got ${got}`);
+    }
   }
   const tmp = `${dir}.tmp-${process.pid}`;
   rmSync(tmp, { recursive: true, force: true });
   mkdirSync(tmp, { recursive: true });
   try {
-    if (e.archive === 'zip') await extractZip(part, tmp);
-    else await extractTarGz(part, tmp, { strip: e.strip ?? 0 });
+    for (const it of items) {
+      const into = it === items[0] ? '.' : it.into;
+      if (it.archive === 'file') {
+        const target = safeJoin(tmp, it.into);
+        mkdirSync(path.dirname(target), { recursive: true });
+        copyFileSync(it.part, target);
+      } else if (it.archive === 'zip') await extractZip(it.part, safeJoin(tmp, into), { strip: it.strip ?? 0 });
+      else await extractTarGz(it.part, safeJoin(tmp, into), { strip: it.strip ?? 0 });
+    }
     rmSync(dir, { recursive: true, force: true }); // stale half-installed dir without .ok
     renameSync(tmp, dir);
   } catch (err) {
@@ -104,7 +117,7 @@ export async function ensureTool(name, { lock = loadLock(), run = defaultRun, st
     throw err;
   }
   writeFileSync(path.join(dir, '.ok'), '');
-  rmSync(part, { force: true });
+  for (const it of items) rmSync(it.part, { force: true });
   return dir;
 }
 
@@ -117,10 +130,12 @@ export async function run(argv, opts = {}) {
   if (target === 'core') { cacheDir(); out('core: nothing to download; cache dir ok'); return 0; }
   const lock = opts.lock ?? loadLock();
   const e = lock[resolveName(target ?? '')];
-  if (!e) { process.stderr.write('usage: pag setup <core|ruffle|jsdos|playwright> [--yes]\n'); return 2; }
+  if (!e) { process.stderr.write('usage: pag setup <core|ruffle|jsdos|easyrpg|love|renpy|playwright> [--yes]\n'); return 2; }
   const where = toolDir(e);
   if (existsSync(path.join(where, '.ok'))) { out(`${e.name} ${e.version}: already installed at ${where}`); return 0; }
-  const what = e.special ? 'npm package plus Chromium browser (several hundred MB)' : `${e.url} (${mb(e.size)})`;
+  const total = e.size + (e.extras ?? []).reduce((n, x) => n + x.size, 0);
+  const disk = e.unpackedSize ? `, about ${Math.round(e.unpackedSize / 1e6)} MB on disk` : '';
+  const what = e.special ? 'npm package plus Chromium browser (several hundred MB)' : `${e.url} (${mb(total)}${disk})`;
   if (!yes) { out(`${e.name} ${e.version} would download ${what} into ${where}. Re-run with --yes to proceed.`); return 0; }
   out(`installing ${e.name} ${e.version} ...`);
   try { out(`ok: ${await ensureTool(e.name, { lock, run: opts.runner })}`); return 0; }

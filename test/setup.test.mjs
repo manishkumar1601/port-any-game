@@ -151,3 +151,80 @@ test('a stalled download is aborted with a clear message, before or after the he
     }
   } finally { stall.closeAllConnections(); stall.close(); }
 });
+
+const extraZip = Buffer.from(createZip([{ name: 'web/x.txt', data: enc('web') }]));
+const license = Buffer.from('license text');
+const extrasLock = (over = {}) => ({
+  'easyrpg-player-js': {
+    name: 'easyrpg-player-js', version: 'x1', url: `${url}/t.tgz`, sha256: sha(tgz), size: tgz.length, archive: 'tgz', strip: 1,
+    extras: [
+      { url: `${url}/z.zip`, sha256: sha(extraZip), size: extraZip.length, archive: 'zip', into: '.' },
+      { url: `${url}/f.txt`, sha256: sha(license), size: license.length, archive: 'file', into: 'COPYING' },
+    ],
+    ...over,
+  },
+});
+
+test('ensureTool installs extras into the tool dir', async () => {
+  const l = extrasLock();
+  const orig = server.listeners('request')[0];
+  server.removeAllListeners('request');
+  server.on('request', (req, res) => {
+    const body = req.url.startsWith('/z') ? extraZip : req.url.startsWith('/f') ? license : tgz;
+    res.writeHead(200, { 'content-length': body.length });
+    res.end(body);
+  });
+  try {
+    const dir = await ensureTool('easyrpg', { lock: l });
+    assert.equal(readFileSync(path.join(dir, 'web', 'x.txt'), 'utf8'), 'web');
+    assert.equal(readFileSync(path.join(dir, 'COPYING'), 'utf8'), 'license text');
+    assert.ok(existsSync(path.join(dir, 'dist', 'js-dos.js')));
+    assert.ok(existsSync(path.join(dir, '.ok')));
+    assert.deepEqual(readdirSync(path.join(process.env.PAG_CACHE, 'downloads')).filter((n) => n.includes('easyrpg')), []);
+  } finally { server.removeAllListeners('request'); server.on('request', orig); }
+});
+
+test("ensureTool checks every extra's sha256 before extracting", async () => {
+  const l = extrasLock({ version: 'x2' });
+  l['easyrpg-player-js'].extras[1].sha256 = 'b'.repeat(64);
+  const orig = server.listeners('request')[0];
+  server.removeAllListeners('request');
+  server.on('request', (req, res) => {
+    const body = req.url.startsWith('/z') ? extraZip : req.url.startsWith('/f') ? license : tgz;
+    res.writeHead(200, { 'content-length': body.length });
+    res.end(body);
+  });
+  try {
+    await assert.rejects(ensureTool('easyrpg', { lock: l }), /sha256 mismatch for easyrpg-player-js/);
+    const dir = toolDir(l['easyrpg-player-js']);
+    assert.equal(existsSync(dir), false);
+    assert.deepEqual(readdirSync(path.join(process.env.PAG_CACHE, 'tools')).filter((n) => n.includes('x2')), []);
+  } finally { server.removeAllListeners('request'); server.on('request', orig); }
+});
+
+test('setup message sums extras and shows disk size', async () => {
+  const l = { renpy: { name: 'renpy', version: 'x3', url: 'http://h/sdk.zip', sha256: '0'.repeat(64), size: 100 * 1048576, archive: 'zip', unpackedSize: 416000000, extras: [{ url: 'http://h/web.zip', sha256: '0'.repeat(64), size: 50 * 1048576, archive: 'zip', into: '.' }] } };
+  let text = '';
+  const w = process.stdout.write;
+  process.stdout.write = (s) => { text += s; return true; };
+  try { assert.equal(await run(['renpy'], { lock: l }), 0); } finally { process.stdout.write = w; }
+  assert.match(text, /150\.0 MB/);
+  assert.match(text, /about 416 MB on disk/);
+});
+
+test('lock pins are well formed', () => {
+  const l = JSON.parse(readFileSync(new URL('../skills/port-any-game/scripts/toolchain.lock.json', import.meta.url), 'utf8'));
+  const check = (e, archives, n) => {
+    assert.match(e.url, /^https:\/\//, n);
+    assert.match(e.sha256, /^[0-9a-f]{64}$/, n);
+    assert.ok(Number.isInteger(e.size) && e.size > 0, n);
+    assert.ok(archives.includes(e.archive), n);
+  };
+  for (const [n, e] of Object.entries(l)) {
+    if (e.special) continue;
+    check(e, ['zip', 'tgz'], n);
+    assert.ok(e.license && /^https:\/\//.test(e.source), n);
+    for (const x of e.extras ?? []) check(x, ['zip', 'tgz', 'file'], n);
+  }
+  for (const n of ['easyrpg-player-js', 'love.js', 'renpy']) assert.ok(l[n], n);
+});
