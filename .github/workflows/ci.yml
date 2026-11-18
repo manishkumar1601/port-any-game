@@ -33,7 +33,8 @@ jobs:
       - name: Unit tests (lane e2e is skipped here; verify tests still use the browser)
         env:
           PAG_E2E: '0'
-        run: npm test
+        # Same as npm test, plus a ::error annotation per failed test (the job log is not readable without a token).
+        run: node --test --test-concurrency=1 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=./test/reporters/github.mjs --test-reporter-destination=stdout "test/**/*.test.mjs"
       - name: Validate
         run: node scripts/validate.mjs
       - name: Wrappers are up to date

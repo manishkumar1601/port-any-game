@@ -46,6 +46,15 @@ test('PAG_E2E_KEEP copies the port with its verify/ report; unset keeps nothing'
   assert.ok(existsSync(path.join(keep, 'web-extract-case-1', 'verify', 'report.json')));
 });
 
+test('github reporter: one escaped ::error per failed test', async () => {
+  const { default: reporter, annotation } = await import('./reporters/github.mjs');
+  assert.equal(annotation({ name: 'a: b, c', message: '100%\r\nx' }), '::error title=a%3A b%2C c::100%25%0D%0Ax\n');
+  const evs = [{ type: 'test:pass', data: { name: 'ok' } }, { type: 'test:fail', data: { name: 't', file: 'file:///x/y.test.mjs', line: 7, details: { error: { cause: { message: 'boom\nmore' } } } } }];
+  let out = '';
+  for await (const l of reporter((async function* () { yield* evs; })())) out += l;
+  assert.match(out, /^::error file=[^,]*y\.test\.mjs,line=7,title=t::boom more\n$/);
+});
+
 // Not a YAML parser (no dependency): checks the shape CI relies on, line by line.
 test('ci.yml has the agreed shape', () => {
   const y = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
@@ -60,8 +69,9 @@ test('ci.yml has the agreed shape', () => {
   assert.match(y, /timeout-minutes: \d+/);
   assert.doesNotMatch(y, /secrets\./);
   for (const m of y.matchAll(/uses: (\S+)/g)) assert.match(m[1], /^actions\/(checkout|setup-node|cache\/restore|cache\/save|upload-artifact)@v4$/, m[1]);
-  const order = ['npm test', 'node scripts/validate.mjs', 'gen-wrappers.mjs --check', 'setup ruffle --yes', 'setup jsdos --yes', 'npm run e2e', 'upload-artifact'].map((s) => y.indexOf(s));
+  const order = ['--test-reporter=./test/reporters/github.mjs', 'node scripts/validate.mjs', 'gen-wrappers.mjs --check', 'setup ruffle --yes', 'setup jsdos --yes', 'npm run e2e', 'upload-artifact'].map((s) => y.indexOf(s));
   assert.ok(order.every((n, i) => n > 0 && (i === 0 || n > order[i - 1])), `step order ${order}`);
+  assert.match(y, /run: node --test --test-concurrency=1 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=\.\/test\/reporters\/github\.mjs --test-reporter-destination=stdout "test\/\*\*\/\*\.test\.mjs"/, 'unit tests print spec and ::error annotations');
   assert.match(y, /PAG_E2E: '0'/);
   assert.match(y, /PAG_E2E_REQUIRE_BROWSER: '1'/);
   assert.match(y, /actions\/cache\/restore@v4/);

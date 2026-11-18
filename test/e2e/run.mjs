@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { annotation } from '../reporters/github.mjs';
 
 const SCRIPTS = '../../skills/port-any-game/scripts';
 
@@ -290,13 +291,15 @@ export function parseE2eArgs(argv) {
   return { target: positionals[0], runner: values.runner, headed: values.headed };
 }
 
+// GitHub Actions: an ::error annotation per failed case, so a red run names it without the job log.
+const ghError = (title, msg) => { if (process.env.GITHUB_ACTIONS === 'true') process.stdout.write(annotation({ name: title, message: String(msg).split('\n')[0] })); };
 async function main(argv) {
   let a;
   try { a = parseE2eArgs(argv); } catch (e) { console.error(e.message); return 2; }
   Object.assign(opts, { runner: a.runner, headed: a.headed });
   const cases = CASES[a.target];
   const why = skipReason();
-  if (why) { const code = skipExit(why); console.log(`${code ? 'FAIL' : 'SKIP'} ${a.target}: ${why}${code ? ' (PAG_E2E_REQUIRE_BROWSER=1)' : ''}`); return code; }
+  if (why) { const code = skipExit(why); console.log(`${code ? 'FAIL' : 'SKIP'} ${a.target}: ${why}${code ? ' (PAG_E2E_REQUIRE_BROWSER=1)' : ''}`); if (code) ghError(a.target, why); return code; }
   console.log(`# runner ${a.runner}${a.headed ? ', headed' : ''}`);
   let failed = 0;
   for (const c of cases) {
