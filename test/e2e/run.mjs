@@ -91,8 +91,8 @@ export async function pipeline(laneId, fixture, { soakSec = 5, mode = 'bundled',
   for (const t of tools) await e2eTool(t);
   return pipelineIn(laneId, fixture, { soakSec, mode, query });
 }
-// R68: PAG_E2E_TARGET_FPS (test-only; CI sets it for the GPU-less macOS runner) overrides verify.target_fps in the packed
-// shell.json. Unset, empty or not a positive number means no override. Product thresholds are never touched.
+// R68: PAG_E2E_TARGET_FPS (test-only; CI sets it for the GPU-less macOS runner) lowers verify.target_fps in the packed
+// shell.json, never raising it above the lane's own target. Unset, empty or not a positive number means no override. Product thresholds are never touched.
 export const targetFpsOverride = (env = process.env) => { const n = Number(env.PAG_E2E_TARGET_FPS); return env.PAG_E2E_TARGET_FPS?.trim() && n > 0 ? n : null; };
 export const mergeTargetFps = (verify, fps) => ({ ...verify, target_fps: Math.min(fps, verify?.target_fps ?? fps) });
 function applyTargetFps(distDir, env = process.env) {

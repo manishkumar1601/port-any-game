@@ -130,7 +130,7 @@ shows how to generate them by hand.
 | `PAG_E2E` | `0` skips all browser lane e2e cases. |
 | `PAG_E2E_KEEP` | Directory; each e2e case copies its port (with `verify/`) there so CI can upload it on failure. |
 | `PAG_E2E_REQUIRE_BROWSER` | `1` makes a skipped browser e2e (no Chrome, no Playwright) exit 1 instead of 0. Skips caused by `PAG_E2E=0` stay 0. |
-| `PAG_E2E_TARGET_FPS` | Positive number overrides `verify.target_fps` in the packed `shell.json` of each e2e case. Unset, empty or non-positive means no override. Product thresholds are unchanged. |
+| `PAG_E2E_TARGET_FPS` | Positive number lowers `verify.target_fps` in the packed `shell.json` of each e2e case (the lower of it and the lane's target; it never raises one). Unset, empty or non-positive means no override. Product thresholds are unchanged. |
 | `GITHUB_ACTIONS=true` | e2e failures print a one-line `::error` annotation (whitespace collapsed, 1000 chars max); [verify.e2e.test.mjs](../test/verify/verify.e2e.test.mjs) uses `target_fps` 10 instead of 30. |
 | `PAG_CACHE`, `PAG_HOME` | Tests set both to temp dirs. `PAG_CACHE` is also a product variable (tool cache). `PAG_HOME` is only set by tests; no script reads it. |
 | `PAG_BROWSER` | Product variable: path to Chrome/Edge; used by doctor tests with a fake binary. |

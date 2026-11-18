@@ -115,7 +115,7 @@ How to read an entry: **Decision** is what the code does. **Why** is the reason 
 **Decision:** files over 256 MiB hash as SHA-256 of first 1 MiB + last 1 MiB with `partial: true`; the browser import hashes identically. **Why:** otherwise large-file entries never match. **If wrong:** none. **Status:** active.
 
 ### R27. Pack source is `build/game/` else `game/`
-**Decision:** pack takes the lane build output when present, otherwise the read-only original. **Why:** the plan left it open. **If wrong:** a task passes an explicit source. **Status:** active. See roadmap for the "pack before build" gap.
+**Decision:** pack takes the lane build output when present, otherwise the read-only original. **Why:** the plan left it open. **If wrong:** a task passes an explicit source. **Status:** active. The "pack before build" gap is closed: pack refuses a `byo` lane that has a build step until `build/lane.json` exists.
 
 ### R28. Stable default port per game
 **Decision:** default port = 20000 + (first 4 bytes of SHA-256(`port.id`) as uint32 % 10000), range 20000–29999. `pag serve` uses it when `--port` is absent. EADDRINUSE is a clear error suggesting `--port`, never a silent other port. Launchers bake the port into `launch.json`; if it is in use they assume the game is already served, open the browser and exit. `pag verify` keeps port 0. **Why:** the origin must stay fixed or OPFS imports are lost; re-importing a BYO game each run is a real UX failure. (The first ledger wording said `% 20000`; the final range is the one above.) **If wrong:** a fixed port collides and the user passes `--port`. **Status:** active.

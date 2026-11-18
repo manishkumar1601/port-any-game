@@ -123,6 +123,7 @@ pag pack [portDir] [--mode byo|bundled|bundled-public]
 - **Exit:** 0 ok; 1 failure; 2 usage error, not a port, unknown lane, unknown or unsupported mode; 4 policy refusal.
 - **Errors:**
   - `a bundled-public pack puts game files in a build meant for sharing. ...` (exit 4; needs `ACK_RIGHTS_HOLDER` or catalog `redistributable`)
+  - `lane <id> needs its build output: run `pag build` first (no build/lane.json)` (a `byo` lane with a build step, before it was built)
   - `lane <id> supports data modes ...; not '<mode>'`
   - `<name> <version> is not installed; run pag setup <tool> --yes first`
   - `lane <id> packs what its build extracted, and there is no build/game yet: run pag build first`
@@ -353,7 +354,7 @@ pag guard [--host=<x>]        (payload on stdin)
 | `PAG_E2E=0` | [test/e2e/run.mjs](../test/e2e/run.mjs) | Skip all browser e2e cases |
 | `PAG_E2E_REQUIRE_BROWSER=1` | e2e runner | A missing browser fails the run instead of skipping |
 | `PAG_E2E_KEEP=<dir>` | e2e runner | Copy each case's port and `verify/` report there |
-| `PAG_E2E_TARGET_FPS=<n>` | e2e runner | Override `verify.target_fps` in the packed fixture (CI sets 10 on GPU-less macOS) |
+| `PAG_E2E_TARGET_FPS=<n>` | e2e runner | Lower `verify.target_fps` in the packed fixture (never raises it) (CI sets 10 on GPU-less macOS) |
 | `PAG_E2E_TOOLS`, `PAG_KEEP_DIR` | [ci.yml](../.github/workflows/ci.yml) | Workflow-level temp paths; the workflow maps them onto `PAG_CACHE` and `PAG_E2E_KEEP` |
 | `PAG_HOME` | e2e runner, tests | Set to a temp dir by tests; **no script reads it** |
 | `PAG_TEST_NOTE`, `PAG_TEST_NOTE_UNSET`, `PAG_TEST_PW` | unit tests | Test fixtures for `--note-env` and `--password-env` |
