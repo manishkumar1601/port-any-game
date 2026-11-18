@@ -48,11 +48,16 @@ const PAGE = {
     return { coi: globalThis.crossOriginIsolated === true, renderer, userAgent: navigator.userAgent };
   },
   pad: (on) => window.__pagVerify?.pad(on),
+  // R64: the lane's own save path (dos-jsdos: DOS disk -> OPFS) runs here when it has one.
   saveWrite: async (token) => {
     const selfTest = await window.__shell.storage.selfTest();
-    await window.__shell.storage.exportSaves(); // runs the lane's saveNow()
+    const lane = window.__shell.lane;
+    let laneSave = 'none';
+    if (typeof lane?.saveNow === 'function') {
+      try { await lane.saveNow(); laneSave = 'ran'; } catch (e) { laneSave = `lane saveNow failed: ${e?.message ?? e}`; }
+    }
     localStorage.setItem('pag-verify-token', token);
-    return selfTest;
+    return { ...selfTest, laneSave };
   },
   saveRead: () => {
     const t = localStorage.getItem('pag-verify-token');
@@ -228,8 +233,10 @@ async function runBrowser(browser, o) {
     const again = await waitState(d, ['ready'], T.readyCachedS);
     m.ready.cachedS = (Date.now() - tr) / 1000;
     if (again.timedOut) m.ready.timedOut = T.readyCachedS;
-    m.save = { ok: selfTest?.ok === true && (await call(d, PAGE.saveRead)) === token, persisted: selfTest?.persisted === true };
+    const laneOk = selfTest?.laneSave === 'ran' || selfTest?.laneSave === 'none';
+    m.save = { ok: selfTest?.ok === true && laneOk && (await call(d, PAGE.saveRead)) === token, persisted: selfTest?.persisted === true, lane: laneOk ? selfTest.laneSave : 'ran' };
     if (!selfTest?.ok) m.save.error = `storage self-test failed: ${selfTest?.error ?? 'no OPFS'}`;
+    else if (!laneOk) m.save.error = selfTest?.laneSave ?? 'lane saveNow failed';
     m.shell = again;
     if (again.state !== 'ready') return;
 

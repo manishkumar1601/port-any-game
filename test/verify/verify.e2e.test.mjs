@@ -63,6 +63,7 @@ test('lane-test ok passes', { skip }, async () => {
     assert.equal(check(r, name)?.status, 'pass', `${name}: ${failing(r)}`);
   }
   assert.equal(check(r, 'memory')?.status, 'skip', failing(r)); // R37: a 2 s soak is too short to judge memory
+  assert.match(check(r, 'save').detail, /lane saveNow ran/); // R64
   const out = path.join(dir, 'verify');
   assert.equal(JSON.parse(readFileSync(path.join(out, 'report.json'), 'utf8')).status, 'pass');
   assert.ok(existsSync(path.join(out, 'console.log')));

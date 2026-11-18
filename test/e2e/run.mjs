@@ -27,6 +27,9 @@ const { makeAnimSwf } = await import('../fixtures/make-swf.mjs');
 const { makeAnimCom } = await import('../fixtures/make-dos-com.mjs');
 const { makeMZ } = await import('../fixtures/make-pe.mjs');
 const { ensureTool } = await import(`${SCRIPTS}/setup.mjs`);
+const { startServer } = await import(`${SCRIPTS}/serve.mjs`);
+const { openCdp } = await import(`${SCRIPTS}/verify/driver-cdp.mjs`);
+const { setTimeout: sleep } = await import('node:timers/promises');
 
 // PAG_E2E=0 turns every browser e2e case off (CI runs them once, via `npm run e2e`, not again under `npm test`).
 export const skipReason = (env = process.env) => {
@@ -99,6 +102,7 @@ async function passes(variant) {
   assert.equal(r.built.verdict, 'GO');
   // R61: the fixture needs an inline script and eval; the relaxation is reported, not warned.
   assert.equal(r.report.checks.find((c) => c.name === 'csp')?.status, 'info', failing(r.report));
+  assert.match(r.report.checks.find((c) => c.name === 'save').detail, /lane save path not exercised/); // R64
 }
 
 // Review Focus 3: the mixed-case reference is served through caseFallback, so no request fails.
@@ -170,10 +174,13 @@ const dosInstall = (dir) => {
   return dir;
 };
 
+const dosRun = () => (runs.dos ??= pipeline('dos-jsdos', dosInstall, { mode: 'byo', tools: ['jsdos'] }));
+
 async function dosByo() {
-  const r = await pipeline('dos-jsdos', dosInstall, { mode: 'byo', tools: ['jsdos'] });
+  const r = await dosRun();
   assert.equal(r.report.status, 'pass', failing(r.report));
   assert.deepEqual(r.built, { lane_config: { exe: 'ANIM.COM' }, verdict: 'GO' });
+  assert.match(r.report.checks.find((c) => c.name === 'save').detail, /lane saveNow ran/); // R64
   console.log(`# dos-jsdos: ${r.report.checks.filter((c) => ['ready', 'fps', 'blank', 'frozen'].includes(c.name)).map((c) => `${c.name}: ${c.detail}`).join(' | ')}`);
   const files = distFiles(r.distDir);
   const rt = files.map((f) => path.relative(r.distDir, f).split(path.sep).join('/')).filter((f) => f.startsWith('runtime/')).sort();
@@ -191,6 +198,52 @@ async function dosByo() {
   assert.match(lic, /GNU GENERAL PUBLIC LICENSE\s+Version 2, June 1991/, 'the GPL-2.0 text itself');
 }
 
+// I4/R64: a file written into the DOS disk survives a reload (ci.persist -> OPFS saves folder -> second bundle), and a
+// later save keeps the earlier one. Drives the packed build directly (one browser profile, so OPFS survives reloads).
+async function dosSaves() {
+  const r = await dosRun();
+  const manifest = JSON.parse(readFileSync(path.join(r.distDir, 'game', 'manifest.json'), 'utf8'));
+  const srv = await startServer({ root: r.distDir, fixtureDir: path.join(r.portDir, 'game'), fixtureIndex: manifest.files.map((f) => ({ path: f.path, size: f.size })), log: () => {} });
+  const d = await openCdp({ path: findBrowser().path, headless: true });
+  try {
+    const ev = (fn, arg) => d.evaluate(fn.toString(), arg);
+    const until = async (fn, what) => {
+      for (const end = Date.now() + 90000; Date.now() < end; await sleep(200)) if (await ev(fn).catch(() => false)) return;
+      throw new Error(`timed out waiting for ${what}: ${JSON.stringify(await ev(() => [window.__shell?.state, window.__shell?.stats.lastError]).catch(() => null))}`);
+    };
+    const play = async () => {
+      await until(() => window.__shell?.state === 'ready', 'ready');
+      const at = await ev(() => { const b = document.getElementById('play').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; });
+      await d.click(at.x, at.y);
+      await until(() => window.__shell?.state === 'running' && window.__shell.stats.gameFrames > 0, 'the first DOS frame');
+    };
+    const save = (name, text) => ev(async ([n, t]) => {
+      await window.__shell.lane.debugCi().fsWriteFile(n, new TextEncoder().encode(t));
+      return window.__shell.lane.saveNow();
+    }, [name, text]);
+    const read = (names) => ev(async (ns) => {
+      const ci = window.__shell.lane.debugCi();
+      const one = (n) => Promise.race([ci.fsReadFile(n).then((b) => new TextDecoder().decode(b)), new Promise((res) => setTimeout(() => res('(no file)'), 5000))]);
+      const out = [];
+      for (const n of ns) out.push(await one(n).catch((e) => `error: ${e.message}`));
+      return out;
+    }, names);
+    await d.open(`${srv.url}/?verify=1&verify_import=/__fixture/`);
+    await play();
+    assert.ok((await save('PAGSAVE1.DAT', 'one')).bytes > 0, 'saveNow wrote the changes');
+    await d.reload();
+    await play();
+    assert.deepEqual(await read(['PAGSAVE1.DAT']), ['one'], 'the save survived a reload');
+    await save('PAGSAVE2.DAT', 'two');
+    await d.reload();
+    await play();
+    assert.deepEqual(await read(['PAGSAVE1.DAT', 'PAGSAVE2.DAT']), ['one', 'two'], 'a later save keeps the earlier one');
+  } finally {
+    await d.close();
+    await srv.close();
+  }
+}
+
 const LANE_CASES = {
   'web-extract': [
     { name: 'web-extract NW.js fixture passes verify', run: () => passes('nwjs') },
@@ -204,6 +257,7 @@ const LANE_CASES = {
   ],
   'dos-jsdos': [
     { name: 'dos-jsdos BYO fixture passes verify with zero game bytes in dist', run: dosByo },
+    { name: 'dos-jsdos saves survive a reload (ci.persist to OPFS, second bundle)', run: dosSaves },
   ],
 };
 

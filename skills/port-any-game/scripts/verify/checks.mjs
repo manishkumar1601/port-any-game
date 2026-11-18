@@ -136,7 +136,11 @@ export function judge(m, t = THRESHOLDS) {
     else if ((rms ?? 0) >= t.audioRms) add('audio', 'pass', `running, peak RMS ${rms.toFixed(4)}`);
     else add('audio', expected ? 'warn' : 'pass', `running but silent (peak RMS ${(rms ?? 0).toFixed(4)})${expected ? '; verify.audio_on_title is true' : ', allowed on the title (audio_on_title: false)'}`);
   }
-  if (m.save) add('save', m.save.ok ? 'pass' : 'fail', m.save.ok ? `token survived a reload${m.save.persisted ? '' : ' (storage not persisted by the browser)'}` : m.save.error ?? 'token lost across a reload');
+  if (m.save) {
+    // R64: lane: 'ran' (its saveNow ran without error) | 'none' (the lane has no save path of its own).
+    const lane = m.save.lane === 'ran' ? '; lane saveNow ran' : m.save.lane === 'none' ? '; lane save path not exercised' : '';
+    add('save', m.save.ok ? 'pass' : 'fail', m.save.ok ? `token survived a reload${m.save.persisted ? '' : ' (storage not persisted by the browser)'}${lane}` : m.save.error ?? 'token lost across a reload');
+  }
   if (m.viewports) {
     const over = m.viewports.filter((v) => v.scrollWidth > v.innerWidth);
     add('viewports', over.length ? 'fail' : 'pass', over.length

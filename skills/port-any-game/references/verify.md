@@ -37,7 +37,7 @@ Always look at the screenshots before you tell the user it works.
 | `fps` | at least 0.9 × the target frame rate (30); at least 0.5 × warns |
 | `input` | key presses change the picture within 3 s |
 | `audio` | sound plays when the lane expects it; a silent title screen is allowed |
-| `save` | a test value survives a page reload |
+| `save` | a test value survives a page reload, and the lane's own save path runs when it has one (DOS: "lane saveNow ran"; others: "lane save path not exercised", which is fine) |
 | `viewports` | the page does not overflow at desktop or phone size |
 | `loop` | the game's frames never stop for more than 2 s |
 | `memory` | heap growth under 5 %/min (5–10 warns, over 10 fails); judged only on soaks of 30 s or more |

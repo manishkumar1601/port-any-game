@@ -93,6 +93,16 @@ test('judge audio, privacy, viewports and errors', () => {
   assert.equal(judge({ checks: [{ name: 'environment', status: 'unsupported' }] }).status, 'pass', 'unsupported is decided by verify, not judge');
 });
 
+// R64: the save check runs the lane's own saveNow when it has one, and says so when it has none.
+test('judge save: token round trip plus the lane save path', () => {
+  const save = (s) => judge({ save: { ok: true, persisted: true, ...s } }).checks.find((c) => c.name === 'save');
+  assert.deepEqual([save({ lane: 'ran' }).status, save({ lane: 'ran' }).detail], ['pass', 'token survived a reload; lane saveNow ran']);
+  assert.match(save({ lane: 'none' }).detail, /lane save path not exercised/);
+  assert.equal(save({ lane: 'none' }).status, 'pass');
+  const bad = save({ ok: false, lane: 'ran', error: 'lane saveNow failed: quota' });
+  assert.deepEqual([bad.status, bad.detail], ['fail', 'lane saveNow failed: quota']);
+});
+
 test('isCrossOrigin ignores data: and blob: of the same origin', () => {
   const o = 'http://127.0.0.1:5000';
   assert.equal(isCrossOrigin('http://127.0.0.1:5000/game/a.bin', o), false);

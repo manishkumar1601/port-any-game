@@ -5,6 +5,7 @@
 // zip.js is the shell's own, imported relative to this file: runtime/<lane>-<hash>/ -> shell/ in dist, and
 // assets/lanes/dos-jsdos/ -> assets/shell/ in the repo (runtime.files can only name files of the js-dos tool).
 import { createZip } from '../../shell/zip.js';
+import { savesDir } from '../../shell/storage.js';
 
 // DOSBox's name for one path segment (drive_cache CreateShortName): upper case, spaces dropped; a base over 8
 // characters, an extension over 3 or a second dot gives the first 6 characters + "~1" + the last extension cut to 3.
@@ -59,6 +60,37 @@ let ci = null;
 let frames = 0;
 let running = true;
 const down = new Set();
+
+// I4/R64: DOSBox writes saves into the worker's in-memory disk. ci.persist() returns the files changed since start as a
+// zip, kept in OPFS (shell.json data.saves) and handed back as a second bundle on the next start.
+const CHANGES = 'dosbox-changes.zip';
+const SAVE_EVERY_MS = 30000;
+let savesPath = null;
+let saving = Promise.resolve(null);
+
+async function readChanges() {
+  try { return new Uint8Array(await (await (await (await savesDir(savesPath)).getFileHandle(CHANGES)).getFile()).arrayBuffer()); }
+  catch (e) { if (e?.name === 'NotFoundError') return null; throw e; }
+}
+
+async function persistChanges() {
+  const diff = await ci.persist();
+  if (!diff?.length) return { bytes: 0 };
+  const fh = await (await savesDir(savesPath, true)).getFileHandle(CHANGES, { create: true });
+  if (!fh.createWritable) throw new Error('this browser cannot write saves from the page (no createWritable)');
+  const w = await fh.createWritable();
+  await w.write(diff);
+  await w.close();
+  return { bytes: diff.length };
+}
+
+// One save at a time; a failed one does not block the next.
+function saveNow() {
+  if (!ci || !savesPath) return Promise.resolve({ bytes: 0 });
+  saving = saving.catch(() => null).then(persistChanges);
+  return saving;
+}
+const saveQuietly = () => saveNow().catch((e) => console.warn('[dos-jsdos] save failed:', e));
 
 const loadScript = (src) => new Promise((resolve, reject) => {
   const s = document.createElement('script');
@@ -122,7 +154,9 @@ export default {
     const r = await fetch(`${base}wdosbox.wasm`);
     if (!r.ok) throw new Error(`could not load ${base}wdosbox.wasm (HTTP ${r.status})`);
     window.compiled.WDOSBOX = { wasmModule: await WebAssembly.compile(await r.arrayBuffer()) };
-    ci = await emu.dosboxWorker(bundle);
+    savesPath = ctx.config.data?.saves ?? null;
+    const changes = savesPath ? await readChanges() : null;
+    ci = await emu.dosboxWorker(changes ? [bundle, changes] : bundle); // later bundles overwrite earlier files
 
     const canvas = document.createElement('canvas'); // on screen from its first frame: an unpainted canvas is a black box
     canvas.style.imageRendering = 'pixelated';
@@ -168,8 +202,14 @@ export default {
     addEventListener('keydown', onKey);
     addEventListener('keyup', onKey);
     addEventListener('blur', releaseKeys);
+    // ponytail: saves every 30 s, when the tab hides (the shell calls pause() on visibilitychange) and on pagehide; a
+    // save made seconds before a crash can be lost.
+    setInterval(saveQuietly, SAVE_EVERY_MS);
+    addEventListener('pagehide', saveQuietly);
   },
-  pause() { running = false; releaseKeys(); ci?.pause(); },
+  pause() { saveQuietly(); running = false; releaseKeys(); ci?.pause(); }, // the save request goes to the worker first
   resume() { running = true; ci?.resume(); },
   frameCounter: () => frames,
+  saveNow,
+  debugCi: () => ci, // tests: the e2e save round trip writes a file into the DOS disk
 };

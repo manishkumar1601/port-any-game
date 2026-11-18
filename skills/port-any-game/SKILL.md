@@ -169,6 +169,7 @@ Tell the user, in plain words:
 - Controls: DOS builds are keyboard only for now. Flash and web games take keyboard and mouse; a gamepad works only
   if a web game supports one itself. There are no touch controls yet.
 - Saves stay in this browser at this address; clearing the site's data deletes them. There is no save export yet.
+  DOS builds store the game's saves every 30 seconds and when the tab is hidden: after saving, wait a moment.
 - The 2-minute check: play with your real keyboard or controller, check the mouse feels right, listen to the sound,
   then save in the game, reload the page and load that save.
 - An already-web game's build and package contain the game files: a private copy, not for sharing publicly.

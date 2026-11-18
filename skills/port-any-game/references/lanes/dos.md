@@ -47,3 +47,9 @@ For private play this needs nothing. If the user ever gives the build (without g
 ## Verify notes
 Target 30 frames per second; ready budget 30 s. BYO privacy rules apply: no request with a body, no cross-origin
 request.
+
+## Saves
+DOS games save to their own disk, which lives in memory while the game runs. The build copies the files the game
+changed into the browser's storage every 30 seconds and when the tab is hidden or closed, and restores them on the
+next start. So a save made in the last few seconds before the browser crashes can be lost: after an important save,
+wait a moment or switch tabs. Verify runs this save path (`save` says "lane saveNow ran").

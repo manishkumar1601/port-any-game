@@ -12,7 +12,7 @@ export async function dirAt(segs, create = false) {
   return d;
 }
 
-function savesDir(savesPath, create) {
+export function savesDir(savesPath, create) {
   const segs = normalizePath(savesPath ?? '')?.split('/');
   if (!segs) throw new Error('no saves folder configured');
   return dirAt(segs, create);
