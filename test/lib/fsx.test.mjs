@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync, existsSync } from 'node:fs';
 import { open } from 'node:fs/promises';
+import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -81,6 +82,7 @@ test('walk reports unreadable entry with error', async (t) => {
       if (process.getuid?.() === 0) return t.skip('running as root, chmod 000 does not block reads');
       chmodSync(bad, 0o000);
     }
+    try { fs.closeSync(fs.openSync(bad, 'r')); return t.skip('this machine cannot make a file unreadable for the current user (an open succeeded despite the lock/chmod)'); } catch { /* unreadable, as the test needs */ }
     const got = await collect(walk(root));
     assert.ok(got.find((e) => e.rel === 'locked.bin').error, 'locked file carries error');
     assert.equal(got.find((e) => e.rel === 'ok.bin').error, undefined);

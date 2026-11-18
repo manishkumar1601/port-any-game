@@ -1,6 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, chmodSync } from 'node:fs';
+import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -141,6 +142,7 @@ test('survey skips unreadable and broken entries and caps file count', async (t)
       if (process.getuid?.() === 0) return t.skip('running as root, chmod 000 does not block reads');
       chmodSync(locked, 0o000);
     }
+    try { fs.closeSync(fs.openSync(locked, 'r')); return t.skip('this machine cannot make a file unreadable for the current user (an open succeeded despite the lock/chmod)'); } catch { /* unreadable, as the test needs */ }
     const s = await survey(dir, { maxFiles: 50 });
     assert.equal(s.truncated, true);
     assert.ok(s.skipped.some((x) => x.path === 'a-locked.dat'), 'locked file is reported as skipped');
