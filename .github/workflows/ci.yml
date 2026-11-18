@@ -18,7 +18,7 @@ jobs:
         shell: bash
     env:
       # Linux has no GPU: verify adds these itself; repeating them is harmless.
-      PAG_CHROME_FLAGS: ${{ runner.os == 'Linux' && '--use-angle=swiftshader --enable-unsafe-swiftshader' || '' }}
+      PAG_CHROME_FLAGS: ${{ matrix.os == 'ubuntu-latest' &&'--use-angle=swiftshader --enable-unsafe-swiftshader' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

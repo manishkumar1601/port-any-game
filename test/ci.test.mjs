@@ -68,6 +68,8 @@ test('ci.yml has the agreed shape', () => {
   assert.match(y, /actions\/cache\/save@v4/);
   assert.match(y, /if: always\(\)/);
   assert.doesNotMatch(y, /^ {4}env:\n(?: {6}.*\n)*? {6}PAG_E2E_KEEP/m, 'PAG_E2E_KEEP is step-level only');
+  const testJob = y.slice(y.indexOf('\n  test:\n'), y.indexOf('\n    steps:', y.indexOf('\n  test:\n')));
+  assert.doesNotMatch(testJob.slice(testJob.indexOf('\n    env:')), /runner\./, 'job-level env cannot use the runner context');
   assert.match(y, /if: failure\(\)/);
   assert.match(y, /toolchain\.lock\.json/);
   // I5: one ubuntu job installs Playwright into the runner temp and runs a lane e2e through it under Xvfb.
