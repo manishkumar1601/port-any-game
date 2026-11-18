@@ -23,12 +23,15 @@ codex plugin add port-any-game@port-any-game
 
 Codex asks you to review the plugin's hooks before they run: trust them when prompted (or open `/hooks`).
 
-**GitHub Copilot CLI**
+**GitHub Copilot** (CLI and VS Code)
 
 ```
-copilot plugin marketplace add manishkumar1601/port-any-game
-copilot plugin install port-any-game@port-any-game
+DISABLE_TELEMETRY=1 npx skills add manishkumar1601/port-any-game -g -a github-copilot
 ```
+
+In PowerShell, run `$env:DISABLE_TELEMETRY=1` first, then the `npx` command. Without npx, after `git clone`:
+`node port-any-game/scripts/install.mjs --host=skills --global`. The Copilot plugin route, with hooks, comes after it
+has been verified.
 
 **OpenCode** (installs the skill, subagents, the `/port-game` command and the guard plugin into `~/.config/opencode`)
 

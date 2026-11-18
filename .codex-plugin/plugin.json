@@ -1,0 +1,7 @@
+{
+  "name": "port-any-game",
+  "version": "0.1.0",
+  "description": "Port PC games you own to a private browser build: survey, choose a lane, build and verify.",
+  "skills": ["./skills/port-any-game"],
+  "hooks": "./hooks/codex.json"
+}

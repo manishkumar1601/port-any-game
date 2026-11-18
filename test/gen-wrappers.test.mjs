@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -85,29 +85,56 @@ test('claude hooks.json uses exec form with CLAUDE_PLUGIN_ROOT', () => {
   assert.match(r.stderr, /DRM removal/);
 });
 
-test('codex and copilot hook commands follow spike b and deny in their shell', () => {
+// Run a hook command string the way this OS's form runs (Windows: PowerShell; elsewhere: sh).
+const shell = (posix, ps, input, env) => (process.platform === 'win32'
+  ? spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { input, encoding: 'utf8', env })
+  : spawnSync('sh', ['-c', posix], { input, encoding: 'utf8', env }));
+const withRoot = { ...process.env, PLUGIN_ROOT: ROOT };
+const noRoot = { ...process.env };
+delete noRoot.PLUGIN_ROOT;
+delete noRoot.CLAUDE_PLUGIN_ROOT;
+
+test('codex hook commands follow spike b and deny in their shell', () => {
   const codex = JSON.parse(read('hooks/codex.json')).hooks;
-  const copilot = JSON.parse(read('com.github.copilot/hooks/hooks.json'));
-  assert.equal(copilot.version, 1);
   const pre = codex.PreToolUse[0];
   assert.equal(pre.matcher, 'Bash|apply_patch');
-  const cases = [
-    ['codex', pre.hooks[0].command, pre.hooks[0].commandWindows],
-    ['copilot', copilot.hooks.preToolUse[0].bash, copilot.hooks.preToolUse[0].powershell],
-  ];
-  for (const [host, posix, ps] of cases) {
-    assert.ok(ps.endsWith('; exit $LASTEXITCODE'), ps);
-    assert.ok(posix.endsWith(`guard --host=${host}`), posix);
-    // Each OS runs its own form (Windows: PowerShell; elsewhere: sh). Codex and Copilot deny with JSON at exit 0.
-    const env = { ...process.env, PLUGIN_ROOT: ROOT };
-    const r = process.platform === 'win32'
-      ? spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { input: fixture(`${host}-pretooluse`), encoding: 'utf8', env })
-      : spawnSync('sh', ['-c', posix], { input: fixture(`${host}-pretooluse`), encoding: 'utf8', env });
-    assert.equal(r.status, 0, `${host}: ${r.stderr}`);
-    assert.match(r.stdout, /"permissionDecision":"deny"/, host);
-  }
+  const { command, commandWindows } = pre.hooks[0];
+  assert.ok(command.endsWith('guard --host=codex'), command);
+  assert.ok(commandWindows.endsWith('guard --host=codex; exit $LASTEXITCODE'), commandWindows);
+  const r = shell(command, commandWindows, fixture('codex-pretooluse'), withRoot); // Codex denies with JSON at exit 0
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /"permissionDecision":"deny"/);
   assert.match(codex.SessionStart[0].hooks[0].command, /status --host=codex$/);
   assert.match(codex.SessionStart[0].hooks[0].commandWindows, /status --host=codex; exit \$LASTEXITCODE$/);
-  assert.match(copilot.hooks.sessionStart[0].bash, /status --host=copilot$/);
-  assert.match(copilot.hooks.sessionStart[0].powershell, /status --host=copilot; exit \$LASTEXITCODE$/);
+});
+
+test('every copilot hook command fails open on a launch failure and still denies via JSON (R56)', () => {
+  const copilot = JSON.parse(read('com.github.copilot/hooks/hooks.json'));
+  assert.equal(copilot.version, 1);
+  const entries = Object.values(copilot.hooks).flat();
+  assert.equal(entries.length, 2);
+  for (const h of entries) {
+    assert.ok(h.bash.endsWith(' || true'), h.bash);
+    assert.ok(h.powershell.endsWith('; exit 0'), h.powershell);
+    // No plugin root: node cannot find pag.mjs, yet the hook exits 0 (Copilot preToolUse fails closed on non-zero).
+    assert.equal(shell(h.bash, h.powershell, fixture('copilot-pretooluse'), noRoot).status, 0, h.bash);
+  }
+  const pre = copilot.hooks.preToolUse[0];
+  assert.match(pre.bash, /guard --host=copilot \|\| true$/);
+  const r = shell(pre.bash, pre.powershell, fixture('copilot-pretooluse'), withRoot);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /"permissionDecision":"deny"/);
+  assert.match(copilot.hooks.sessionStart[0].powershell, /status --host=copilot; exit 0$/);
+});
+
+test('codex manifest parses and points at an existing hooks file', () => {
+  const m = JSON.parse(read('.codex-plugin/plugin.json'));
+  const claude = JSON.parse(read('.claude-plugin/plugin.json'));
+  assert.equal(m.name, claude.name);
+  assert.equal(m.version, claude.version);
+  assert.equal(m.hooks, './hooks/codex.json'); // Codex: ./-prefixed, inside the plugin root
+  assert.ok(existsSync(path.join(ROOT, m.hooks)));
+  assert.ok(JSON.parse(read(m.hooks)).hooks.PreToolUse);
+  // Claude reads only .claude-plugin/, whose manifest does not redirect hooks: Claude keeps hooks/hooks.json.
+  assert.equal(claude.hooks, undefined);
 });

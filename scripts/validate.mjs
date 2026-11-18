@@ -35,7 +35,7 @@ export function validateRepo(rootDir) {
 
   // Versions must agree across manifests.
   const versions = {};
-  for (const f of ['package.json', '.claude-plugin/plugin.json', 'plugin.json', 'opencode/plugin/package.json']) {
+  for (const f of ['package.json', '.claude-plugin/plugin.json', 'plugin.json', '.codex-plugin/plugin.json', 'opencode/plugin/package.json']) {
     const p = path.join(rootDir, f);
     if (existsSync(p)) versions[f] = readJson(p).version;
   }
