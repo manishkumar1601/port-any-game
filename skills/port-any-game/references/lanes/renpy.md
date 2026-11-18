@@ -19,7 +19,8 @@ The survey picked `rebuild-renpy`: the folder has `game/` with `.rpy`, `.rpyc` o
    - Copies only the game's `game/` folder into `<port>/build/renpy-project/` (the SDK writes into the project it
      builds, so the install is never touched).
    - Runs the SDK's `web_build` on it, with no window (about 10 s for a small game; it stops after 10 minutes).
-   - Removes the offline-app extras (service worker, manifest, icons, debug map), adds the frame counter
+   - Removes the offline-app extras (`service-worker.js`, `manifest.json`, `pwa_catalog.json`, `icons/`, the
+     `*.symbols` debug map) and the service-worker registration, adds the frame counter
      (`__pag_hook.js`) and moves the result to `<port>/build/game/`.
    - Writes `<port>/build/lane.json` (`game_version`, `sdk_version`) and prints the verdict and why. A save warning,
      if any, is printed as `warning` and added to `PORTING_LOG.md` with the verdict.
@@ -53,6 +54,7 @@ so a game that ships a patched `renpy/` folder loses those patches.
 | What you see | Cause | Fix |
 |---|---|---|
 | build: "the Ren'Py SDK is not installed; run: pag setup renpy --yes" | SDK missing | Do step 1: show the size and ask first. Never run the `--yes` line from the message directly. |
+| build: "the Ren'Py 8.6.1 SDK has no Python for <platform>-<arch> ..." | the SDK ships its build Python only for Windows x64, macOS and Linux x64 (for example, no ARM Linux) | This computer cannot run the build. Tell the user; they can run `pag build` on a Windows, macOS or x64 Linux computer. |
 | build: "Ren'Py web support is not available in the installed SDK; delete ... and run: pag setup renpy --yes" | the SDK folder's `web/` files are missing or do not match the SDK | Ask the user, then delete that folder and do step 1 again. |
 | build: "no Ren'Py game/ folder in the install" | `pag new` was pointed at a parent folder | `pag new` again on the folder that holds `game/` and `renpy/`. |
 | build: "Ren'Py web build failed (exit N): ..." | the SDK stopped; the message ends with its last 20 output lines | Read them. `<port>/build/renpy-project/` stays after a failure: its `log.txt` and `traceback.txt` show the game's own errors (often Python modules that Python 3.12 removed, or Python 2 code from a Ren'Py 7 game). Report it; this lane cannot patch game code. |
@@ -63,6 +65,9 @@ so a game that ships a patched `renpy/` folder loses those patches.
 
 ## Known gaps
 - Ren'Py 7.x and older need another SDK, which is not pinned yet.
+- The build needs a Windows, macOS or x64 Linux computer: the 8.6.1 SDK has no Python for others (ARM Linux).
+- Ren'Py's "web cache preload" preference does nothing (the offline-app files are removed) and logs one error if a
+  player turns it on.
 - No threads, networking, native Python modules (`.pyd`/`.so` in `game/`), Live2D, or Steam features on the web.
 - Large games download everything inside their `.rpa` archives before the title screen, and need memory to match.
 - Built and tested on Windows so far; macOS and Linux builds are checked in CI.

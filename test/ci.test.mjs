@@ -113,6 +113,9 @@ test('ci.yml has the agreed shape', () => {
   assert.doesNotMatch(testJob.slice(testJob.indexOf('\n    env:')), /runner\./, 'job-level env cannot use the runner context');
   assert.match(y, /if: failure\(\)/);
   assert.match(y, /toolchain\.lock\.json/);
+  // The tool cache must be re-saved when the lock or the setup lines change: a hit on an older key skips the save.
+  const keys = [...y.matchAll(/^ {10}key: (.*)$/gm)].map((m) => m[1]);
+  assert.deepEqual(keys, Array(2).fill("e2e-tools-${{ runner.os }}-${{ hashFiles('skills/port-any-game/scripts/toolchain.lock.json', '.github/workflows/ci.yml') }}"), 'restore and save use the same key');
   // I5: one ubuntu job installs Playwright into the runner temp and runs a lane e2e through it under Xvfb.
   const at = y.indexOf('\n  playwright:\n');
   assert.ok(at > 0, 'a playwright job');

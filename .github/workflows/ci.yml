@@ -44,7 +44,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.PAG_E2E_TOOLS }}
-          key: e2e-tools-${{ runner.os }}-${{ hashFiles('skills/port-any-game/scripts/toolchain.lock.json') }}
+          key: e2e-tools-${{ runner.os }}-${{ hashFiles('skills/port-any-game/scripts/toolchain.lock.json', '.github/workflows/ci.yml') }}
       - name: Setup runtimes (into the e2e tool cache)
         env:
           PAG_CACHE: ${{ env.PAG_E2E_TOOLS }}
@@ -67,7 +67,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ env.PAG_E2E_TOOLS }}
-          key: e2e-tools-${{ runner.os }}-${{ hashFiles('skills/port-any-game/scripts/toolchain.lock.json') }}
+          key: e2e-tools-${{ runner.os }}-${{ hashFiles('skills/port-any-game/scripts/toolchain.lock.json', '.github/workflows/ci.yml') }}
       - name: Upload verify reports
         if: failure()
         uses: actions/upload-artifact@v4

@@ -1,6 +1,6 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,8 +25,15 @@ async function portOf(gameDir) {
   await newPort({ gameDir, outDir: portDir, lane: 'rebuild-renpy' });
   return portDir;
 }
-// Pretends `pag setup renpy` ran (the temp PAG_CACHE): build only checks for the .ok marker.
-const fakeTool = () => { const d = toolDir(loadLock().renpy); mkdirSync(d, { recursive: true }); writeFileSync(path.join(d, '.ok'), ''); return d; };
+// Pretends `pag setup renpy` ran (the temp PAG_CACHE): build checks the .ok marker and this OS's SDK python.
+const fakeTool = () => {
+  const d = toolDir(loadLock().renpy);
+  const py = renpyCommand(d, 'p', 'd').file;
+  mkdirSync(path.dirname(py), { recursive: true });
+  writeFileSync(py, '');
+  writeFileSync(path.join(d, '.ok'), '');
+  return d;
+};
 
 // The structure of the 8.6.1 web build's index.html (observed in spike h), written by us; the title has a non-ASCII byte.
 const REGISTER = "navigator.serviceWorker.register('./service-worker.js', { updateViaCache: 'all' });";
@@ -69,7 +76,7 @@ function writeWebBuild(dir) {
 
 // A stand-in for spawnSync: records the call and, on success, writes a web build where the SDK would.
 const fakeSpawn = (calls, { status = 0, stdout = '', stderr = '', error } = {}) => (file, args, opts) => {
-  calls.push({ file, args, opts, script: existsSync(path.join(args[3], 'game', 'script.rpy')), install: existsSync(path.join(args[3], 'renpy')) });
+  calls.push({ file, args, opts, game: readdirSync(path.join(args[3], 'game')).sort(), script: existsSync(path.join(args[3], 'game', 'script.rpy')), install: existsSync(path.join(args[3], 'renpy')) });
   if (status === 0) {
     writeWebBuild(args[5]);
     writeFileSync(`${args[5]}.zip`, 'zip');
@@ -163,8 +170,8 @@ test('build failure leaves no build/game and reports the SDK output', async () =
   assert.ok(!existsSync(path.join(portDir, 'build', 'game')));
   assert.deepEqual(readdirSync(path.join(portDir, 'build')), ['renpy-project'], 'only the project copy stays, for its log.txt');
   await assert.rejects(lane.build(portDir, { spawn: fakeSpawn([], { status: 1, stdout: 'Web support is not available. Please download web support' }) }), /web support is not available[\s\S]*pag setup renpy --yes/);
-  const enoent = Object.assign(new Error('spawnSync python ENOENT'), { code: 'ENOENT' });
-  await assert.rejects(lane.build(portDir, { spawn: fakeSpawn([], { status: null, error: enoent }) }), /failed \(exit ENOENT\): spawnSync python ENOENT/);
+  const timeout = Object.assign(new Error('spawnSync python ETIMEDOUT'), { code: 'ETIMEDOUT' });
+  await assert.rejects(lane.build(portDir, { spawn: fakeSpawn([], { status: null, error: timeout }) }), /failed \(exit ETIMEDOUT\): spawnSync python ETIMEDOUT/);
 });
 
 test('build fails without the SDK or without a game/ folder', async () => {
@@ -175,6 +182,31 @@ test('build fails without the SDK or without a game/ folder', async () => {
   const portDir = await portOf(dir);
   renameSync(path.join(dir, 'game'), path.join(dir, 'other'));
   await assert.rejects(lane.build(portDir, { spawn: fakeSpawn([]) }), /no Ren'Py game\/ folder/);
+});
+
+// Review I1: the 8.6.1 SDK has no Linux arm64 python; the build says so before running anything.
+test('build names the platform when the SDK has no python for it', async () => {
+  const sdk = fakeTool();
+  rmSync(renpyCommand(sdk, 'p', 'd').file);
+  const calls = [];
+  const portDir = await portOf(makeRenpy(dirOf()));
+  await assert.rejects(lane.build(portDir, { spawn: fakeSpawn(calls) }), {
+    message: `the Ren'Py 8.6.1 SDK has no Python for ${process.platform}-${process.arch}: it ships Python only for Windows x64, macOS (universal) and Linux x64, so rebuild-renpy cannot build on this computer`,
+  });
+  assert.deepEqual([calls.length, existsSync(path.join(portDir, 'build'))], [0, false], 'nothing ran, nothing written');
+});
+
+// Review M1: a link inside game/ could pull files from outside the game into game.zip.
+test('the project copy skips links inside game/', async (t) => {
+  fakeTool();
+  const dir = makeRenpy(dirOf());
+  const outside = path.join(path.dirname(dir), 'outside');
+  mkdirSync(outside, { recursive: true });
+  writeFileSync(path.join(outside, 'secret.txt'), 'x');
+  try { symlinkSync(outside, path.join(dir, 'game', 'escape'), process.platform === 'win32' ? 'junction' : 'dir'); } catch (e) { return t.skip(`cannot create a link here: ${e.code}`); }
+  const calls = [];
+  await lane.build(await portOf(dir), { spawn: fakeSpawn(calls) });
+  assert.deepEqual(calls[0].game, ['options.rpy', 'script.rpy']);
 });
 
 test('build falls back to game/script_version.txt and warns about saves', async () => {
@@ -195,6 +227,10 @@ test('build falls back to game/script_version.txt and warns about saves', async 
   assert.deepEqual([r.lane_config.game_version, r.verdict], [null, 'HARD']);
   assert.match(r.warning, /no config\.save_directory/);
   assert.match(log, /no config\.save_directory/);
+  ({ r } = await at((d) => writeFileSync(path.join(d, 'game', 'options.rpy'), '# define config.save_directory = "x"\n    ## config.save_directory = "y"\n')));
+  assert.match(r.warning, /no config\.save_directory/, 'a commented-out line sets nothing (review M2)');
+  ({ r } = await at((d) => writeFileSync(path.join(d, 'game', 'options.rpy'), 'init python:\n    config.save_directory = "x"\n')));
+  assert.equal(r.warning, undefined, 'a plain assignment in an init block counts');
   ({ r } = await at((d) => {
     for (const f of ['script', 'options']) renameSync(path.join(d, 'game', `${f}.rpy`), path.join(d, 'game', `${f}.rpyc`));
   }));

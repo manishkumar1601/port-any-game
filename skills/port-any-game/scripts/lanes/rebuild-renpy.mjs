@@ -54,7 +54,7 @@ export function cleanWebBuild(dir) {
 function saveWarning(game) {
   const rpy = readdirSync(game, { recursive: true }).filter((f) => /\.rpy$/i.test(f));
   if (!rpy.length) return 'the game ships only compiled scripts, so whether it sets config.save_directory is unknown; without it saves are lost on reload';
-  const set = rpy.some((f) => /\bconfig\.save_directory\s*=\s*['"]/.test(readFileSync(path.join(game, f), 'utf8')));
+  const set = rpy.some((f) => /^[ \t]*(define\s+)?config\.save_directory\s*=\s*['"]/m.test(readFileSync(path.join(game, f), 'utf8')));
   return set ? null : 'no config.save_directory in game/*.rpy: saves are lost on reload';
 }
 
@@ -73,6 +73,12 @@ export default {
     const dir = path.resolve(portDir);
     const sdk = toolDir(loadLock().renpy);
     if (!existsSync(path.join(sdk, '.ok'))) throw new Error("the Ren'Py SDK is not installed; run: pag setup renpy --yes");
+    const build = path.join(dir, 'build');
+    const project = path.join(build, 'renpy-project');
+    const tmp = path.join(build, `.tmp-${process.pid}`);
+    const { file, args } = renpyCommand(sdk, project, tmp);
+    // Spike h §1: no Linux arm64 python in the 8.6.1 SDK zip (design §8: say why, do not fail obscurely).
+    if (!existsSync(file)) throw new Error(`the Ren'Py ${SDK} SDK has no Python for ${process.platform}-${process.arch}: it ships Python only for Windows x64, macOS (universal) and Linux x64, so rebuild-renpy cannot build on this computer`);
     const game = path.join(dir, 'game', 'game');
     if (!isDir(game)) throw new Error("no Ren'Py game/ folder in the install: point pag new at the folder that holds game/ (and renpy/)");
     let survey = {};
@@ -81,17 +87,13 @@ export default {
     if (!version) try { version = scriptVersion(readFileSync(path.join(game, 'script_version.txt'), 'utf8')); } catch { /* none */ }
     const v = renpyVerdict(version, SDK);
 
-    const build = path.join(dir, 'build');
     const out = path.join(build, 'game');
-    const project = path.join(build, 'renpy-project');
-    const tmp = path.join(build, `.tmp-${process.pid}`);
     for (const p of [out, path.join(build, 'lane.json'), project, tmp, `${tmp}.zip`]) rmSync(p, { recursive: true, force: true, maxRetries: 2 });
     // The SDK writes into the project (log, cache, .rpyc), so it builds a copy; a link could pull files from outside the game.
     cpSync(game, path.join(project, 'game'), { recursive: true, filter: (src) => !lstatSync(src).isSymbolicLink() });
     try {
-      const { file, args } = renpyCommand(sdk, project, tmp);
       const r = spawn(file, args, { env: { ...process.env, SDL_VIDEODRIVER: 'dummy', SDL_AUDIODRIVER: 'dummy' }, timeout: 600000, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true });
-      const output = [r.stdout, r.stderr, r.error?.message].filter(Boolean).join('\n'); // error: no python here (ENOENT), or the timeout
+      const output = [r.stdout, r.stderr, r.error?.message].filter(Boolean).join('\n'); // error: e.g. the timeout
       if (/Web support is not available/.test(output)) throw new Error(`Ren'Py web support is not available in the installed SDK; delete ${sdk} and run: pag setup renpy --yes`);
       if (r.error || r.status !== 0) {
         const tail = output.split(/\r\n|\r|\n/).filter((l) => l.trim()).slice(-20).join('\n'); // progress lines end in \r

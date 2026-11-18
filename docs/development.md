@@ -109,7 +109,7 @@ covered by it; they still launch Chrome and need no runtime tools.
   gets its own port dir.
 - **Shared tool cache.** Runtime tools (Ruffle, js-dos, EasyRPG, love.js, the Ren'Py SDK, Playwright) install once into
   `<os.tmpdir()>/pag-e2e-tools` and are reused by every e2e run on the machine. Pre-seed it by hand with
-  `PAG_CACHE=<that dir> node skills/port-any-game/scripts/pag.mjs setup ruffle --yes` (also `jsdos`, `easyrpg`, `love`,
+  `PAG_CACHE=<that dir> node skills/port-any-game/scripts/pag.mjs setup ruffle --yes` (also `jsdos`, `easyrpg`, `love`, `renpy`,
   `playwright`). `pag setup` honours `PAG_CACHE` and otherwise uses `~/.port-any-game`. Deleting the folder just forces
   a re-download.
 - **Network failures skip, nothing else does.** A fetch/DNS/timeout error skips the case with a message; a sha256
@@ -180,8 +180,9 @@ also unit-tested ([validate.test.mjs](../test/validate.test.mjs)). It checks:
 1. Locate the tool cache and keep dir with `node` (`os.tmpdir()` differs per OS) and export `PAG_E2E_TOOLS`, `PAG_KEEP_DIR`.
 2. Unit tests with `PAG_E2E=0`, reporters `spec` + `test/reporters/github.mjs`.
 3. `node scripts/validate.mjs`, then `node scripts/gen-wrappers.mjs --check`.
-4. Restore the tool cache (`actions/cache/restore`, key `e2e-tools-<os>-<hash of toolchain.lock.json>`).
-5. `pag setup ruffle --yes` and `pag setup jsdos --yes` into that cache (`PAG_CACHE`).
+4. Restore the tool cache (`actions/cache/restore`, key `e2e-tools-<os>-<hash of toolchain.lock.json and ci.yml>`: a new
+   pin or a new `pag setup` line makes a new key, so the cache is saved again with every tool).
+5. `pag setup <tool> --yes` for `ruffle`, `jsdos`, `easyrpg`, `love` and `renpy` into that cache (`PAG_CACHE`).
 6. `npm run e2e` with `PAG_E2E_KEEP`, `PAG_E2E_REQUIRE_BROWSER=1` (a runner without Chrome fails rather than skips), and on macOS
    `PAG_E2E_TARGET_FPS=10`.
 7. Save the tool cache with `if: always()` when there was no cache hit, so a red first run still keeps downloads.
