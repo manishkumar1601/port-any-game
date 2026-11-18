@@ -15,7 +15,7 @@ export default async function* githubReporter(source) {
     if (ev.type !== 'test:fail') continue;
     const { name, file, line, details } = ev.data;
     const err = details?.error?.cause ?? details?.error;
-    const msg = String(err?.message ?? err ?? 'failed').split('\n').slice(0, 3).join(' ').slice(0, 500);
+    const msg = String(err?.message ?? err ?? 'failed').replace(/\s*\r?\n\s*/g, ' ').slice(0, 1000);
     yield annotation({ name, file: file && rel(file), line, message: msg });
   }
 }

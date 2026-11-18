@@ -22,7 +22,9 @@ const ADAPTER = fileURLToPath(new URL('../fixtures/lane-test/adapter.js', import
 const PAG = fileURLToPath(new URL('../../skills/port-any-game/scripts/pag.mjs', import.meta.url));
 const laneModule = (verifyExtra) => ({
   id: 'lane-test', dataModes: ['byo', 'bundled'], adapter: ADAPTER,
-  shell: () => ({ verify: { target_fps: 30, inputs: ['ArrowRight', 'Click'], audio_on_title: true, budget_ready_s: 10, ...verifyExtra } }),
+  // Hosted macOS/Windows runners are GPU-less VMs that run rAF well below 30 fps: CI judges the fixture against a lower
+  // target. The product thresholds (checks.mjs) are untouched.
+  shell: () => ({ verify: { target_fps: process.env.GITHUB_ACTIONS === 'true' ? 10 : 30, inputs: ['ArrowRight', 'Click'], audio_on_title: true, budget_ready_s: 10, ...verifyExtra } }),
 });
 
 let n = 0;
