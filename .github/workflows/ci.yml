@@ -55,6 +55,8 @@ jobs:
         env:
           PAG_E2E_KEEP: ${{ env.PAG_KEEP_DIR }}
           PAG_E2E_REQUIRE_BROWSER: '1' # a runner without Chrome must fail, not skip
+          # R68: the GPU-less macOS VM runs the fixtures at ~14 fps; test-only override, empty = none (ubuntu/windows keep 30)
+          PAG_E2E_TARGET_FPS: ${{ matrix.os == 'macos-latest' && '10' || '' }}
         run: npm run e2e
       # Saved even when e2e fails, so a red first run still keeps the downloads.
       - name: Save e2e tool cache

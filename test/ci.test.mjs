@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { CASES, cleanup, ghError, keepPort, parseE2eArgs, skipExit, skipReason } from './e2e/run.mjs';
+import { CASES, cleanup, ghError, keepPort, parseE2eArgs, skipExit, targetFpsOverride, skipReason } from './e2e/run.mjs';
 
 const tmp = mkdtempSync(path.join(tmpdir(), 'pag-ci-'));
 after(() => { rmSync(tmp, { recursive: true, force: true, maxRetries: 5 }); cleanup(); });
@@ -50,6 +50,12 @@ test('e2e ghError: a multi-line failure is one annotation line that keeps its se
   assert.match(out, /^::error title=web-extract case::verify failed checks: \[\{"name":"fps"/);
 });
 
+test('PAG_E2E_TARGET_FPS: unset, empty or not a positive number means no override (R68)', () => {
+  for (const v of [undefined, '', ' ', '0', '-5', 'abc']) assert.equal(targetFpsOverride({ PAG_E2E_TARGET_FPS: v }), null, String(v));
+  assert.equal(targetFpsOverride({}), null);
+  assert.equal(targetFpsOverride({ PAG_E2E_TARGET_FPS: '10' }), 10);
+});
+
 test('PAG_E2E_KEEP copies the port with its verify/ report; unset keeps nothing', () => {
   const port = path.join(tmp, 'port');
   mkdirSync(path.join(port, 'verify'), { recursive: true });
@@ -86,6 +92,10 @@ test('ci.yml has the agreed shape', () => {
   const order = ['--test-reporter=./test/reporters/github.mjs', 'node scripts/validate.mjs', 'gen-wrappers.mjs --check', 'setup ruffle --yes', 'setup jsdos --yes', 'npm run e2e', 'upload-artifact'].map((s) => y.indexOf(s));
   assert.ok(order.every((n, i) => n > 0 && (i === 0 || n > order[i - 1])), `step order ${order}`);
   assert.match(y, /run: node --test --test-concurrency=1 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=\.\/test\/reporters\/github\.mjs --test-reporter-destination=stdout "test\/\*\*\/\*\.test\.mjs"/, 'unit tests print spec and ::error annotations');
+  assert.match(y, /^ {10}PAG_E2E_TARGET_FPS: \$\{\{ matrix\.os == 'macos-latest' && '10' \|\| '' \}\}$/m, 'R68: macOS-only fps target on the Lane e2e step');
+  const laneStep = y.slice(y.indexOf('- name: Lane e2e\n'), y.indexOf('# Saved even when e2e fails'));
+  assert.match(laneStep, /PAG_E2E_TARGET_FPS/, 'set on the Lane e2e step only');
+  assert.equal((y.match(/PAG_E2E_TARGET_FPS/g) ?? []).length, 1);
   assert.match(y, /PAG_E2E: '0'/);
   assert.match(y, /PAG_E2E_REQUIRE_BROWSER: '1'/);
   assert.match(y, /actions\/cache\/restore@v4/);

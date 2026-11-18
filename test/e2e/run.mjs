@@ -91,6 +91,16 @@ export async function pipeline(laneId, fixture, { soakSec = 5, mode = 'bundled',
   for (const t of tools) await e2eTool(t);
   return pipelineIn(laneId, fixture, { soakSec, mode, query });
 }
+// R68: PAG_E2E_TARGET_FPS (test-only; CI sets it for the GPU-less macOS runner) overrides verify.target_fps in the packed
+// shell.json. Unset, empty or not a positive number means no override. Product thresholds are never touched.
+export const targetFpsOverride = (env = process.env) => { const n = Number(env.PAG_E2E_TARGET_FPS); return env.PAG_E2E_TARGET_FPS?.trim() && n > 0 ? n : null; };
+function applyTargetFps(distDir, env = process.env) {
+  const fps = targetFpsOverride(env);
+  if (!fps) return;
+  const f = path.join(distDir, 'shell.json');
+  const shell = JSON.parse(readFileSync(f, 'utf8'));
+  writeFileSync(f, `${JSON.stringify({ ...shell, verify: { ...shell.verify, target_fps: fps } }, null, 2)}\n`);
+}
 async function pipelineIn(laneId, fixture, { soakSec, mode, query }) {
   const dir = path.join(base, `case-${++n}`);
   const gameDir = fixture(path.join(dir, 'install'));
@@ -99,6 +109,7 @@ async function pipelineIn(laneId, fixture, { soakSec, mode, query }) {
   await newPort({ gameDir, outDir: portDir, lane: laneId });
   // build and pack look the tool up in PAG_CACHE
   const { built, distDir } = await withToolCache(async () => ({ built: await LANES[laneId].build(portDir), ...(await pack(portDir, { mode })) }));
+  applyTargetFps(distDir);
   const t0 = Date.now();
   const report = await withToolCache(() => verify(distDir, { runner: opts.runner, headed: opts.headed, soakSec, query })); // Playwright lives there
   keepPort(portDir, `${laneId}-${path.basename(dir)}`);
