@@ -126,6 +126,20 @@ test('denies recursive deletes of a port folder or an ancestor of one', () => {
   }
 });
 
+// M9: the port's git hooks are layer 4; the agent may not switch them off (AGENTS.md rule 4).
+test('denies git --no-verify and core.hooksPath changes inside a port', () => {
+  const root = port('m9');
+  for (const c of ['git commit --no-verify -m "x"', 'git commit -n -m x', 'git commit -anm x', 'git push --no-verify', 'git push --no-verify origin main',
+    'git config core.hooksPath /dev/null', 'git config --unset core.hooksPath', 'git config --local core.hookspath .x', 'git -c core.hooksPath=/dev/null commit -m x',
+    'git config --replace-all core.hooksPath x']) {
+    assert.equal(sh(c, root).code, 'GIT_HOOKS_BYPASS', c);
+  }
+  for (const c of ['git commit -m "fix: -n and --no-verify are words here"', 'git config core.hooksPath', 'git config --get core.hooksPath', 'git push -n', 'git log -n 3', 'git config user.name']) {
+    assert.equal(sh(c, root).deny, false, c);
+  }
+  assert.equal(sh('git commit --no-verify -m x', base).deny, false, 'not a port');
+});
+
 test('allows unrelated commands', () => {
   const root = port('p7');
   for (const c of ['npm test', 'node --test "test/**/*.test.mjs"', 'git status', 'git log --oneline -5', 'git diff HEAD~1', 'ls -la', 'cat package.json', 'npm install --save-dev prettier',

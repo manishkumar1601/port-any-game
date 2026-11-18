@@ -41,8 +41,11 @@ export async function staticChecks(dist, shell, manifest, port) {
   }
   add('manifest', problems.length ? 'fail' : 'pass', problems.length ? problems.slice(0, 5).join('; ')
     : `${manifest.files?.length ?? 0} game files, ${((manifest.total_bytes ?? 0) / MiB).toFixed(1)} MiB, ${shell.data?.mode}`);
-  const big = files.filter((e) => e.size > 25 * MiB);
-  add('host limits', big.length ? 'warn' : 'pass', big.length ? `${big.length} files over 25 MiB, which some static hosts refuse (${big[0].rel})` : `${files.length} files, none over 25 MiB`);
+  // M11: only builds that may go on a static host (byo, bundled-public); a private bundled build stays on this computer.
+  if (shell.data?.mode !== 'bundled') {
+    const big = files.filter((e) => e.size > 25 * MiB);
+    add('host limits', big.length ? 'warn' : 'pass', big.length ? `${big.length} files over 25 MiB, which some static hosts refuse (${big[0].rel})` : `${files.length} files, none over 25 MiB`);
+  }
 
   let headers = null;
   try { headers = readFileSync(path.join(dist, '_headers'), 'utf8'); } catch { /* checked below */ }

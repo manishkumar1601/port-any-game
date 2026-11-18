@@ -35,7 +35,7 @@ Always look at the screenshots before you tell the user it works.
 | `blank` | the picture is not near-black or flat (up to 3 of 10 blank samples, such as a fade, only warn) |
 | `frozen` | the picture changes; "static until input" only warns |
 | `fps` | at least 0.9 × the target frame rate (30); at least 0.5 × warns |
-| `input` | key presses change the picture within 3 s |
+| `input` | the lane's inputs change the picture within 3 s (web-extract: arrow keys; Flash and DOS: a click on the middle of the stage, then Enter and Space) |
 | `audio` | sound plays when the lane expects it; a silent title screen is allowed |
 | `save` | a test value survives a page reload, and the lane's own save path runs when it has one (DOS: "lane saveNow ran"; others: "lane save path not exercised", which is fine) |
 | `viewports` | the page does not overflow at desktop or phone size |

@@ -76,3 +76,13 @@ test('usage errors exit 2', () => {
   assert.equal(run('survey', path.join(base, 'missing')).status, 2);
   assert.equal(run('survey', go(), '--bogus').status, 2);
 });
+
+// M18: asking for help is not an error.
+test('pag --help, -h and help print usage and exit 0', () => {
+  for (const a of ['--help', '-h', 'help']) {
+    const r = run(a);
+    assert.equal(r.status, 0, a);
+    assert.match(r.stdout, /usage: pag <command>/, a);
+    assert.match(r.stdout, /verify/, a);
+  }
+});

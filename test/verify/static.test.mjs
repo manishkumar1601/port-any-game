@@ -52,6 +52,16 @@ test('static: a lane CSP relaxation is reported as info, never warn (R61)', asyn
   assert.match(c.detail, /script-src.*'unsafe-eval' 'unsafe-inline'/);
 });
 
+// M11: a private bundled build is played from this computer, so static-host file limits do not apply to it.
+test('static: host limits are checked only for builds meant for a host', async () => {
+  const p = await packed({ mode: 'bundled' });
+  writeFileSync(path.join(p.distDir, 'big.bin'), Buffer.alloc(26 * 1024 * 1024));
+  assert.equal(status(await staticChecks(p.distDir, p.shell, p.manifest, p.port), 'host limits'), undefined);
+  for (const mode of ['byo', 'bundled-public']) {
+    assert.equal(status(await staticChecks(p.distDir, { ...p.shell, data: { ...p.shell.data, mode } }, p.manifest, p.port), 'host limits'), 'warn', mode);
+  }
+});
+
 test('probe: headers, Range 206 and auth 401/200 (spec §9 step 2)', async () => {
   const { distDir, shell } = await packed({ mode: 'byo' });
   const srv = await startServer({ root: distDir, log: () => {} });

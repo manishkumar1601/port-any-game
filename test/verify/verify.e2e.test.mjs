@@ -22,7 +22,7 @@ const ADAPTER = fileURLToPath(new URL('../fixtures/lane-test/adapter.js', import
 const PAG = fileURLToPath(new URL('../../skills/port-any-game/scripts/pag.mjs', import.meta.url));
 const laneModule = (verifyExtra) => ({
   id: 'lane-test', dataModes: ['byo', 'bundled'], adapter: ADAPTER,
-  shell: () => ({ verify: { target_fps: 30, inputs: ['ArrowRight'], audio_on_title: true, budget_ready_s: 10, ...verifyExtra } }),
+  shell: () => ({ verify: { target_fps: 30, inputs: ['ArrowRight', 'Click'], audio_on_title: true, budget_ready_s: 10, ...verifyExtra } }),
 });
 
 let n = 0;
@@ -64,6 +64,8 @@ test('lane-test ok passes', { skip }, async () => {
   }
   assert.equal(check(r, 'memory')?.status, 'skip', failing(r)); // R37: a 2 s soak is too short to judge memory
   assert.match(check(r, 'save').detail, /lane saveNow ran/); // R64
+  // M10: 'Click' is a trusted click on the stage: pointerdown + pointerup on top of the key's keydown + keyup.
+  assert.ok(r.runs[0].measures.input.events >= 4, JSON.stringify(r.runs[0].measures.input));
   const out = path.join(dir, 'verify');
   assert.equal(JSON.parse(readFileSync(path.join(out, 'report.json'), 'utf8')).status, 'pass');
   assert.ok(existsSync(path.join(out, 'console.log')));

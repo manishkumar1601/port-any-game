@@ -56,7 +56,8 @@ export default {
     return {
       ...(lane_config ? { lane_config } : {}),
       needs_coi: false,
-      verify: { target_fps: 30, inputs: [], audio_on_title: false, budget_ready_s: 30 },
+      // M10: many titles wait for a click or a key; 'Click' is a trusted click on the stage (verify).
+      verify: { target_fps: 30, inputs: ['Click', 'Enter', 'Space'], audio_on_title: false, budget_ready_s: 30 },
     };
   },
 };

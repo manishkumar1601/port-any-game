@@ -156,15 +156,40 @@ function dryRun(d, toks) {
 
 const globRe = (s) => new RegExp(`^${s.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.')}$`, 'i');
 
+// M9: the port's git hooks are layer 4 (AGENTS.md rule 4): no --no-verify, no core.hooksPath change, inside a port.
+function hooksBypass(sub, args, cfg) {
+  const deny = (what) => { throw new PolicyError('GIT_HOOKS_BYPASS', `${what} would switch off the port's git hooks, which keep game data out of git. Never bypass them; if a hook refuses, tell the user why.`); };
+  if (cfg.some((c) => /^core\.hookspath=/i.test(c))) deny('git -c core.hooksPath');
+  if (sub === 'config') {
+    const k = args.findIndex((a) => a.toLowerCase() === 'core.hookspath');
+    const writes = args.slice(k + 1).some((a) => !a.startsWith('-')) || args.some((a) => /^(--(unset|unset-all|replace-all|add|edit)|set|unset)$/.test(a));
+    if (k >= 0 && writes) deny('git config core.hooksPath');
+  }
+  if (sub !== 'commit' && sub !== 'push') return;
+  for (let j = 0; j < args.length && args[j] !== '--'; j++) {
+    const t = args[j];
+    if (t === '--no-verify') deny(`git ${sub} --no-verify`);
+    if (/^--(message|file|author|date|reuse-message|reedit-message|template|fixup|squash|trailer|pathspec-from-file)$/.test(t)) { j++; continue; }
+    if (sub !== 'commit' || !/^-[a-zA-Z]+$/.test(t)) continue; // push -n is --dry-run
+    const letters = t.slice(1);
+    const v = letters.search(/[mFCct]/); // a value-taking letter ends the bundle
+    if ((v < 0 ? letters : letters.slice(0, v)).includes('n')) deny('git commit -n (--no-verify)');
+    if (v === letters.length - 1) j++; // its value is the next token
+  }
+}
+
 function gitCheck(toks, dir) {
   let d = dir, i = 0;
+  const cfg = [];
   for (; i < toks.length; i++) {
     const t = toks[i];
     if (t === '-C') d = rp(d, toks[++i] ?? '.');
-    else if (t === '-c' || t === '--git-dir' || t === '--work-tree' || t === '--namespace') i++;
+    else if (t === '-c') cfg.push(toks[++i] ?? '');
+    else if (t === '--git-dir' || t === '--work-tree' || t === '--namespace') i++;
     else if (!t.startsWith('-')) break;
   }
   const sub = (toks[i] ?? '').toLowerCase();
+  if (findPort(d)) hooksBypass(sub, toks.slice(i + 1), cfg);
   if (!['add', 'stage', 'commit', 'push'].includes(sub)) return;
   const ctx = findPort(d);
   if (!ctx || ctx.public) return;

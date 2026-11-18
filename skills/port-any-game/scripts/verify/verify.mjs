@@ -33,6 +33,10 @@ const PAGE = {
   },
   soak: () => ({ heap: window.__pagVerify?.heap() ?? null, gameFrames: window.__shell?.stats.gameFrames ?? 0 }),
   frames: () => ({ state: window.__shell?.state ?? null, gameFrames: window.__shell?.stats.gameFrames ?? 0 }),
+  stage: () => {
+    const r = document.getElementById('host')?.getBoundingClientRect();
+    return r?.width ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null;
+  },
   play: () => {
     const r = document.getElementById('play')?.getBoundingClientRect();
     return r?.width ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null;
@@ -194,12 +198,17 @@ async function runBrowser(browser, o) {
     m.shell = last;
     if (last.state !== 'running') return;
 
-    // 8: the lane's input script (keys by KeyboardEvent.code) plus the fake gamepad; the picture must change within 3 s.
+    // 8: the lane's input script (keys by KeyboardEvent.code; 'Click' = a trusted click on the middle of the stage, M10)
+    // plus the fake gamepad; the picture must change within 3 s.
     const inputs = o.shell.verify?.inputs ?? [];
     if (inputs.length) {
       const before = await call(d, PAGE.tick);
       const px0 = pixels(before.frame);
-      for (const code of inputs) await d.key(code);
+      for (const code of inputs) {
+        if (code !== 'Click') { await d.key(code); continue; }
+        const at = await call(d, PAGE.stage);
+        if (at) await d.click(at.x, at.y);
+      }
       await call(d, PAGE.pad, true);
       await sleep(100);
       await call(d, PAGE.pad, false);

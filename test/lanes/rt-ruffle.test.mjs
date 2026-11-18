@@ -81,6 +81,7 @@ test('build records the swf, or the main projector exe, in build/lane.json', asy
   assert.deepEqual(JSON.parse(readFileSync(path.join(a, 'build', 'lane.json'), 'utf8')), ra.lane_config);
   assert.deepEqual(lane.shell({}, { portDir: a }).lane_config, ra.lane_config);
   assert.equal(lane.shell({}, { portDir: a }).verify.audio_on_title, false);
+  assert.deepEqual(lane.shell({}, { portDir: a }).verify.inputs, ['Click', 'Enter', 'Space'], 'M10: click to start, then a key');
 
   const p = await portOf(install({ 'Game.exe': makeProjector(swf) }));
   assert.deepEqual((await lane.build(p)).lane_config, { swf: 'Game.exe', projector: true });

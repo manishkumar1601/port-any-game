@@ -3,7 +3,8 @@
 This folder is one game port, made with port-any-game. It is its own git repository.
 
 1. Read `PORTING_LOG.md` first. Resume at the first unchecked item and log what you do.
-2. Run `pag status` to see the port state before you act.
+2. Run `node <port-any-game skill dir>/scripts/pag.mjs status` to see the port state before you act (`pag` is not on
+   PATH; the skill dir is the folder that holds port-any-game's SKILL.md).
 3. `game/` is a read-only link to the user's own install. Never write into it.
    Never delete or move this port folder, or anything in it, recursively: some tools (Windows PowerShell 5.1
    `Remove-Item -Recurse`) follow the `game` link and delete the user's real game. If the user wants the port

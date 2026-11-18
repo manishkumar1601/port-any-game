@@ -152,9 +152,9 @@ new folder: `node <skill-dir>/scripts/pag.mjs new "<game>" "<new port>" --lane <
 Run the full check: `node <skill-dir>/scripts/pag.mjs verify "<port>/dist" --soak 120`. If your agent has the
 `port-verifier` subagent, give it `<skill-dir>` and `<port>` and let it run this and read the screenshots; it
 reports problems and never fixes them.
-Otherwise run it yourself and open the `step-*.png` screenshots. Fix until it passes, or tell the user honestly what
-still fails. Exit 3 means this machine cannot run the check (see [verify](references/verify.md)), not that the port
-failed.
+Otherwise run it yourself, with a command timeout of at least 5 minutes (it takes 3 to 4), and open the `step-*.png`
+screenshots. Fix until it passes, or tell the user honestly what still fails. Exit 3 means this machine cannot run
+the check (see [verify](references/verify.md)), not that the port failed.
 
 ### 8. Hand over
 - Play now: `node <skill-dir>/scripts/pag.mjs serve "<port>/dist" --open`. It keeps running, so start it in the

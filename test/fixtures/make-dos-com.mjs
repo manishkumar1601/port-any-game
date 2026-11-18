@@ -1,6 +1,6 @@
 // Synthetic DOS fixture: a hand-assembled 8086 .COM (our own bytes, MIT). VGA mode 13h, then every vertical retrace
-// it redraws the screen as diagonal stripes of the whole palette, shifted one colour per frame, until a key is pressed;
-// then text mode and exit. (The brief's listing filled the screen with ONE colour per frame (mov al,bl / rep stosb):
+// it redraws the screen as diagonal stripes of the whole palette, shifted one colour per frame, until Escape is pressed
+// (other keys are read and ignored, so verify's Enter/Space inputs keep it running); then text mode and exit. (The brief's listing filled the screen with ONE colour per frame (mov al,bl / rep stosb):
 // verify's blank rule counts a flat frame as blank (luma std < 2), so pixel colour here is (offset + frame) instead.)
 
 export function makeAnimCom() {
@@ -33,7 +33,9 @@ export function makeAnimCom() {
     0xCD, 0x16, //             int 16h             ; key waiting? (ZF=1: no)
     0x74, 0xDF, //             jz frame            ; loop until a key is pressed (45 - 33 = 12)
     0x30, 0xE4, //             xor ah,ah
-    0xCD, 0x16, //             int 16h             ; consume the key
+    0xCD, 0x16, //             int 16h             ; consume the key (ah = scan code)
+    0x80, 0xFC, 0x01, //       cmp ah,1            ; Escape?
+    0x75, 0xD6, //             jnz frame           ; no: keep animating (54 - 42 = 12)
     0xB8, 0x03, 0x00, //       mov ax,3
     0xCD, 0x10, //             int 10h             ; text mode
     0xC3, //                   ret                 ; to PSP:0 (int 20h): exit

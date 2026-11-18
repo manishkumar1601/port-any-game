@@ -40,10 +40,12 @@ const comFolder = () => install({ 'ANIM.COM': makeAnimCom(), 'INSTALL.EXE': make
 test('makeAnimCom starts with B8 13 00 CD 10', () => {
   const b = makeAnimCom();
   assert.deepEqual([...b.subarray(0, 5)], [0xB8, 0x13, 0x00, 0xCD, 0x10], 'mov ax,13h / int 10h');
-  assert.equal(b.length, 55);
+  assert.equal(b.length, 60);
   const rel8 = (at) => at + 2 + (b[at + 1] << 24 >> 24); // target of a 2-byte jump at `at`
   assert.deepEqual([b[35], rel8(35)], [0xE2, 30], 'loop fill lands on mov ax,di');
   assert.deepEqual([b[43], rel8(43), b[12]], [0x74, 12, 0xBA], 'jz frame lands on mov dx,3DAh');
+  assert.deepEqual([...b.subarray(49, 52)], [0x80, 0xFC, 0x01], 'cmp ah,1 (Escape)');
+  assert.deepEqual([b[52], rel8(52)], [0x75, 12], 'any other key: jnz frame keeps animating (M10 sends Enter/Space)');
   assert.equal(b.at(-1), 0xC3, 'ret');
 });
 
@@ -79,7 +81,8 @@ test('build records the main DOS exe (upper-cased 8.3) in build/lane.json', asyn
   const sh = lane.shell({}, { portDir: a });
   assert.deepEqual(sh.lane_config, ra.lane_config);
   assert.equal(sh.needs_coi, false);
-  assert.deepEqual(sh.verify, { target_fps: 30, inputs: [], audio_on_title: false, budget_ready_s: 30 });
+  // M10: a title screen that waits for a click or a key is not 'frozen'.
+  assert.deepEqual(sh.verify, { target_fps: 30, inputs: ['Click', 'Enter', 'Space'], audio_on_title: false, budget_ready_s: 30 });
   // A .COM is not in the survey (no header): with only an installer MZ beside it, the largest .COM runs.
   assert.deepEqual((await lane.build(await portOf(comFolder()))).lane_config, { exe: 'ANIM.COM' });
 });
