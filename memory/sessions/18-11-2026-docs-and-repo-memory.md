@@ -22,6 +22,16 @@
 - No unnecessary code comments; at most a one-line comment when one is needed.
 - A session log goes in `memory/sessions/` with a row in `memory/README.md`, named `dd-mm-yyyy-topic-name`.
 
+## Outcome
+
+- **Commits:**
+  - `16bf0bc`: system docs, decision log, roadmap;
+  - `ae701ed`: `memory/`, `CLAUDE.md`, `AGENTS.md`;
+  - `beb4853`: the rights hint now uses single quotes, and skill references and comments match the code.
+- **Docs pass:** every link and anchor resolves (451 checked). The M2 backlog gained the code/doc gaps the writers found.
+- **Tests:** unit suite 375 pass, 0 fail, 11 skip. The first run had one timing flake under load, and the rerun was clean.
+- **CI:** green on Windows, macOS and Ubuntu, plus the Playwright tier, at `beb4853`.
+
 ## Open / next
 
 - Tier-1 manual agent eval (release gate): `docs/evals/tier1.md`.
