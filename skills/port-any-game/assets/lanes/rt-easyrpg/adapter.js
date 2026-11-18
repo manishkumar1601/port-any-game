@@ -39,10 +39,11 @@ let player = null;
 
 // R46: like Ruffle's splash, the player's own start-up (black, its logo, black again) is not counted as game frames.
 // A 16x12 copy of the canvas, taken right after each frame is drawn, tells the phases apart until the game shows.
-// ponytail: a game that opens on a black screen is counted from STARTUP_MAX frames on (10 s at 60 fps).
-const STARTUP_MAX = 600;
-let phase = 0; // 0 black, 1 logo, 2 black, 3 game
-let loops = 0;
+// Phases: 0 black, 1 logo, 2 black, 3 game. ponytail: a game that opens on black is counted from 10 s after the first
+// frame on, so it still reaches verify's ready budget on a slow machine.
+export const startupPhase = (phase, lit, ms) => (phase >= 3 || ms >= 10000 ? 3 : lit === (phase !== 1) ? phase + 1 : phase);
+let phase = 0;
+let firstAt = null;
 let probe = null;
 function lit(canvas) {
   probe ??= Object.assign(document.createElement('canvas'), { width: 16, height: 12 }).getContext('2d', { willReadFrequently: true });
@@ -107,7 +108,7 @@ export default {
       },
       preMainLoop: () => running,
       postMainLoop() {
-        if (phase < 3 && (++loops > STARTUP_MAX || lit(canvas) === (phase !== 1))) phase++;
+        if (phase < 3) phase = startupPhase(phase, lit(canvas), performance.now() - (firstAt ??= performance.now()));
         if (phase === 3) { frames++; ctx.reportFrame(); }
       },
     });
@@ -117,8 +118,9 @@ export default {
   resume() { running = true; },
   frameCounter: () => frames,
   // Saves live in IndexedDB (IDBFS at /easyrpg/<game>/Save); the player syncs after each save, this forces one.
-  saveNow() {
+  async saveNow() {
     const fs = player?.FS;
-    return fs ? new Promise((resolve, reject) => fs.syncfs(false, (err) => (err ? reject(err) : resolve()))) : Promise.resolve();
+    if (!fs) throw new Error('the EasyRPG player has no FS to sync (not started)');
+    await new Promise((resolve, reject) => fs.syncfs(false, (err) => (err ? reject(err) : resolve())));
   },
 };

@@ -7,8 +7,7 @@ Odds 85–95%; usually minutes. RPG Maker XP/VX/Ace and MV/MZ games are other la
 
 ## Inputs
 - `<port>` from `pag new`, with `ACK_PRIVATE_USE_ONLY` and `ACK_RUNTIME_LICENSE` recorded.
-- The EasyRPG Player web build (GPL-3.0-or-later, about 4 MB from easyrpg.org, plus its licence text from GitHub),
-  installed once per computer.
+- The EasyRPG Player web build (GPL-3.0-or-later, about 4 MB from easyrpg.org), installed once per computer.
 - Data mode `byo`: the build holds no game files. On first start the page asks the user to choose the game folder and
   copies it into the browser's storage. Nothing is uploaded.
 - Never the RPG Maker RTP or any RTP replacement in the build or the repository (see RTP below).

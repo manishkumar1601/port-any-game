@@ -303,7 +303,7 @@ async function easyrpgByo() {
   const lic = readFileSync(path.join(r.distDir, 'LICENSES', 'easyrpg-player-js.txt'), 'utf8');
   assert.match(lic, /^easyrpg-player-js 0\.8\.1\.1\nLicense: GPL-3\.0-or-later\nSource: https:\/\/github\.com\/EasyRPG\/Player\n/);
   assert.match(lic, /complete corresponding source code is available at https:\/\/github\.com\/EasyRPG\/Player \(tag\/version 0\.8\.1\.1\)/);
-  assert.match(lic, /GNU GENERAL PUBLIC LICENSE\s+Version 3/, 'the GPL-3.0 text itself (COPYING)');
+  assert.match(lic, /GNU GENERAL PUBLIC LICENSE\s+Version 3/, 'the GPL-3.0 text itself (assets/licenses/GPL-3.0.txt)');
   // Review Focus 1: a title the player misses is logged as "DL Failure" (a 404) or "Cannot find" (not in index.json).
   const missed = readFileSync(path.join(r.report.reportDir, 'console.log'), 'utf8').split('\n').filter((l) => /DL Failure|Cannot find/i.test(l));
   assert.deepEqual(missed.filter((l) => /title/i.test(l)), [], missed.join('\n'));

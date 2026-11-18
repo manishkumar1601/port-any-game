@@ -11,7 +11,7 @@ const { LANES } = await import('../../skills/port-any-game/scripts/lanes/index.m
 const { loadLock, toolDir } = await import('../../skills/port-any-game/scripts/setup.mjs');
 const { cspFor } = await import('../../skills/port-any-game/scripts/pack.mjs');
 const { makeRm2k } = await import('../fixtures/make-rm2k.mjs');
-const { gencacheIndex, gamePath } = await import('../../skills/port-any-game/assets/lanes/rt-easyrpg/adapter.js');
+const { default: adapter, gencacheIndex, gamePath, startupPhase } = await import('../../skills/port-any-game/assets/lanes/rt-easyrpg/adapter.js');
 const lane = LANES['rt-easyrpg'];
 
 const tmp = mkdtempSync(path.join(tmpdir(), 'pag-erpg-'));
@@ -58,6 +58,22 @@ test('gamePath strips the game prefix and dot segments', () => {
   assert.equal(gamePath('index.wasm', 'g'), null);
   assert.equal(gamePath('games/other/RPG_RT.ldb', 'g'), null);
   assert.equal(gamePath('games/g/../x', 'g'), null);
+});
+
+test('startupPhase skips black, the logo and black again, or starts after 10 s', () => {
+  const run = (frames) => frames.reduce((p, [lit, ms]) => startupPhase(p, lit, ms), 0);
+  assert.equal(run([[false, 0], [false, 50]]), 0, 'black start');
+  assert.equal(run([[false, 0], [true, 100], [true, 900]]), 1, 'the logo');
+  assert.equal(run([[false, 0], [true, 100], [false, 1100]]), 2, 'black after the logo');
+  assert.equal(run([[false, 0], [true, 100], [false, 1100], [true, 1300]]), 3, 'the game');
+  assert.equal(startupPhase(3, false, 20), 3, 'a counted game stays counted through a fade to black');
+  assert.equal(startupPhase(0, false, 9999), 0);
+  assert.equal(startupPhase(0, false, 10000), 3, 'a game that opens on black counts from 10 s on');
+  assert.equal(startupPhase(1, true, 10000), 3);
+});
+
+test('saveNow rejects without the player FS', async () => {
+  await assert.rejects(adapter.saveNow(), /FS/);
 });
 
 test('build finds a root one folder down', async () => {

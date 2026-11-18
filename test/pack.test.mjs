@@ -26,6 +26,11 @@ test('GPL-2.0 text is the verbatim gnu.org file', () => {
   assert.equal(sha(readFileSync(GPL2)), 'edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6');
 });
 
+const GPL3 = fileURLToPath(new URL('../skills/port-any-game/assets/licenses/GPL-3.0.txt', import.meta.url));
+test('GPL-3.0 text is the verbatim EasyRPG Player 0.8.1.1 COPYING', () => {
+  assert.equal(sha(readFileSync(GPL3)), '8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903');
+});
+
 const LOCK = { 'fake-rt': { name: 'fake-rt', version: '1.2.3', license: 'GPL-2.0', source: 'https://example.invalid/fake-rt', licenseFile: 'COPYING' } };
 const tool = toolDir(LOCK['fake-rt']);
 mkdirSync(path.join(tool, 'sub'), { recursive: true });
@@ -137,6 +142,18 @@ test('pack writes shell, manifest, _headers, robots, LICENSES', async () => {
     assert.equal(a.status, 200, 'entry.adapter resolves');
     assert.equal(a.headers.get('cache-control'), 'public, max-age=31536000, immutable');
   } finally { await srv.close(); }
+});
+
+test('pack appends the GPL-3.0 text for GPL-3.0 runtimes', async () => {
+  for (const license of ['GPL-3.0', 'GPL-3.0-only', 'GPL-3.0-or-later', 'GPL-3.0+']) {
+    const { dir } = makePort();
+    const { distDir } = await pack(dir, opts({ lock: { 'fake-rt': { ...LOCK['fake-rt'], license, licenseFile: undefined } } }));
+    const lic = readFileSync(path.join(distDir, 'LICENSES', 'fake-rt.txt'), 'utf8');
+    assert.ok(lic.startsWith(`fake-rt 1.2.3\nLicense: ${license}\n`), license);
+    assert.match(lic, /complete corresponding source code is available at https:\/\/example\.invalid\/fake-rt \(tag\/version 1\.2\.3\)/, license);
+    assert.ok(lic.endsWith(readFileSync(GPL3, 'utf8')), license);
+    assert.ok(!lic.includes('Version 2, June 1991'), license);
+  }
 });
 
 test('runtime folder hash changes when the adapter changes (R30)', async () => {

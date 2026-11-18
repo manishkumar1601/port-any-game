@@ -23,7 +23,7 @@ Based on US, EU, UK, Indian and Japanese law (research note 04, Part B):
 - A game whose program is DRM-protected stays STOP even when its data files are not: the law is unsettled, so the
   tool takes the safe side and suggests a DRM-free edition.
 - **Open-source players** carry duties only when a build is given to someone: keep the licence texts and source
-  links (`dist/LICENSES/`). js-dos is GPL-2.0, Ruffle MIT or Apache-2.0. Private play triggers nothing. The GPL never
+  links (`dist/LICENSES/`). js-dos is GPL-2.0, EasyRPG Player GPL-3.0-or-later, Ruffle MIT or Apache-2.0. Private play triggers nothing. The GPL never
   covers or permits sharing the game's own files.
 
 ## Recording acknowledgements

@@ -32,17 +32,7 @@
     "archive": "tgz",
     "strip": 1,
     "license": "GPL-3.0-or-later",
-    "licenseFile": "COPYING",
-    "source": "https://github.com/EasyRPG/Player",
-    "extras": [
-      {
-        "url": "https://raw.githubusercontent.com/EasyRPG/Player/0.8.1.1/COPYING",
-        "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
-        "size": 35147,
-        "archive": "file",
-        "into": "COPYING"
-      }
-    ]
+    "source": "https://github.com/EasyRPG/Player"
   },
   "love.js": {
     "name": "love.js",

@@ -212,11 +212,11 @@ Details worth knowing:
 - **Hashed runtime folder.** The folder name is `<lane>-<first 8 hex of sha256>` over the sorted relative paths and
   bytes of the adapter plus the pinned runtime files. Because the name changes with the content,
   `/runtime/*` can be served `immutable` for a year, and `shell.json` (never cached) points at the current folder.
-  The runtime tool must already be installed (`pag setup ruffle|jsdos --yes`).
+  The runtime tool must already be installed (`pag setup ruffle|jsdos|easyrpg --yes`).
 - **Atomic swap.** The build is written under `<port>/work/pack-tmp-<pid>` and renamed over `dist/`; on failure the
   old `dist/` is restored, and a BYO pack never keeps game bytes from an earlier bundled one.
 - **Licences.** `LICENSES/` gets the shell's MIT text and one notice per runtime tool (GPL tools also get the
-  source pointer; GPL-2.0 gets the full text). Keep it with any copy that is shared.
+  source pointer; GPL-2.0 and GPL-3.0 get the full text from `assets/licenses/`). Keep it with any copy that is shared.
 
 ## Headers and CSP
 

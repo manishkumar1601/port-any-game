@@ -263,7 +263,7 @@ pag setup <core|ruffle|jsdos|easyrpg|love|renpy|playwright> [--yes]
 | `core` | nothing; creates the cache dir |
 | `ruffle` | Ruffle self-hosted build (lane `rt-ruffle`) |
 | `jsdos` | js-dos (lane `dos-jsdos`) |
-| `easyrpg` | EasyRPG Player web build plus its GPL text (lane `rt-easyrpg`) |
+| `easyrpg` | EasyRPG Player web build (lane `rt-easyrpg`) |
 | `love` | love.js packager |
 | `renpy` | Ren'Py SDK plus web support files, about 416 MB on disk |
 | `playwright` | npm package plus Chromium into `<cache>/ms-playwright` (several hundred MB) |

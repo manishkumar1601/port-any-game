@@ -1,1 +1,3 @@
 `GPL-2.0.txt` is a verbatim copy of https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt, fetched 2026-11-18 (SHA-256 `edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6`); verbatim copying of the licence document is permitted by the FSF. `pag pack` appends it to `LICENSES/<tool>.txt` for GPL-2.0 runtimes (js-dos).
+
+`GPL-3.0.txt` is a verbatim copy of the GNU GPL version 3 as shipped by EasyRPG Player (`COPYING` at tag 0.8.1.1, https://github.com/EasyRPG/Player; SHA-256 `8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903`); verbatim copying of the licence document is permitted by the licence itself. `pag pack` appends it to `LICENSES/<tool>.txt` for GPL-3.0 runtimes (EasyRPG Player), whose web build ships no licence file.
