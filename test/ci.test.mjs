@@ -24,7 +24,7 @@ test('PAG_E2E_REQUIRE_BROWSER=1 turns a missing browser into a failure, only the
 test("the 'all' target holds every lane's cases", () => {
   const lanes = Object.keys(CASES).filter((k) => k !== 'all');
   assert.deepEqual(CASES.all.map((c) => c.name), lanes.flatMap((l) => CASES[l].map((c) => c.name)));
-  assert.equal(CASES.all.length, 9);
+  assert.equal(CASES.all.length, 11);
 });
 
 // I5: the Playwright verify tier runs through the same lane cases.
@@ -96,7 +96,7 @@ test('ci.yml has the agreed shape', () => {
   assert.match(y, /timeout-minutes: \d+/);
   assert.doesNotMatch(y, /secrets\./);
   for (const m of y.matchAll(/uses: (\S+)/g)) assert.match(m[1], /^actions\/(checkout|setup-node|cache\/restore|cache\/save|upload-artifact)@v4$/, m[1]);
-  const order = ['--test-reporter=./test/reporters/github.mjs', 'node scripts/validate.mjs', 'gen-wrappers.mjs --check', 'setup ruffle --yes', 'setup jsdos --yes', 'npm run e2e', 'upload-artifact'].map((s) => y.indexOf(s));
+  const order = ['--test-reporter=./test/reporters/github.mjs', 'node scripts/validate.mjs', 'gen-wrappers.mjs --check', 'setup ruffle --yes', 'setup jsdos --yes', 'setup easyrpg --yes', 'npm run e2e', 'upload-artifact'].map((s) => y.indexOf(s));
   assert.ok(order.every((n, i) => n > 0 && (i === 0 || n > order[i - 1])), `step order ${order}`);
   assert.match(y, /run: node --test --test-concurrency=1 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=\.\/test\/reporters\/github\.mjs --test-reporter-destination=stdout "test\/\*\*\/\*\.test\.mjs"/, 'unit tests print spec and ::error annotations');
   assert.match(y, /^ {10}PAG_E2E_TARGET_FPS: \$\{\{ matrix\.os == 'macos-latest' && '10' \|\| '' \}\}$/m, 'R68: macOS-only fps target on the Lane e2e step');

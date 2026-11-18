@@ -1,8 +1,8 @@
 # Lanes
 
-A **lane** is one way of getting a game running in the browser. `pag survey` ranks the lanes that fit a game, `pag new` picks one, `pag build` runs its build step, and `pack` bundles its adapter and runtime into the shell. This page describes the lane module contract, the ranking, the four lanes built in M1, the planned stubs, and how to add a lane.
+A **lane** is one way of getting a game running in the browser. `pag survey` ranks the lanes that fit a game, `pag new` picks one, `pag build` runs its build step, and `pack` bundles its adapter and runtime into the shell. This page describes the lane module contract, the ranking, the four lanes built in M1, the M2 lanes, the planned stubs, and how to add a lane.
 
-Related: [survey-and-catalog.md](survey-and-catalog.md) (how detection feeds the lanes), [runtime.md](runtime.md) (shell, `shell.json`, pack), [safety-and-policy.md](safety-and-policy.md) (acks and data modes), [verify.md](verify.md). The agent-facing, per-lane runbooks are in [references/lanes/](../skills/port-any-game/references/lanes/): [web-extract.md](../skills/port-any-game/references/lanes/web-extract.md), [known-ports.md](../skills/port-any-game/references/lanes/known-ports.md), [runtimes.md](../skills/port-any-game/references/lanes/runtimes.md) (Ruffle), [dos.md](../skills/port-any-game/references/lanes/dos.md). Do not copy those into this repo doc; they are what the agent reads at run time.
+Related: [survey-and-catalog.md](survey-and-catalog.md) (how detection feeds the lanes), [runtime.md](runtime.md) (shell, `shell.json`, pack), [safety-and-policy.md](safety-and-policy.md) (acks and data modes), [verify.md](verify.md). The agent-facing, per-lane runbooks are in [references/lanes/](../skills/port-any-game/references/lanes/): [web-extract.md](../skills/port-any-game/references/lanes/web-extract.md), [known-ports.md](../skills/port-any-game/references/lanes/known-ports.md), [runtimes.md](../skills/port-any-game/references/lanes/runtimes.md) (Ruffle), [dos.md](../skills/port-any-game/references/lanes/dos.md), [easyrpg.md](../skills/port-any-game/references/lanes/easyrpg.md). Do not copy those into this repo doc; they are what the agent reads at run time.
 
 ## Where lanes live
 
@@ -10,9 +10,10 @@ Related: [survey-and-catalog.md](survey-and-catalog.md) (how detection feeds the
 |---|---|
 | [scripts/lanes/index.mjs](../skills/port-any-game/scripts/lanes/index.mjs) | Registry (`LANES`, keyed by `id`) and `rankLanes(survey)` |
 | [scripts/lanes/web-extract.mjs](../skills/port-any-game/scripts/lanes/web-extract.mjs), [known-port.mjs](../skills/port-any-game/scripts/lanes/known-port.mjs), [rt-ruffle.mjs](../skills/port-any-game/scripts/lanes/rt-ruffle.mjs), [dos-jsdos.mjs](../skills/port-any-game/scripts/lanes/dos-jsdos.mjs) | The four M1 lanes |
+| [scripts/lanes/rt-easyrpg.mjs](../skills/port-any-game/scripts/lanes/rt-easyrpg.mjs) | The M2 lanes |
 | [scripts/lanes/stubs.mjs](../skills/port-any-game/scripts/lanes/stubs.mjs) | Descriptor-only lanes for later milestones |
 | `assets/lanes/<id>/adapter.js` | The browser adapter, copied into `dist/runtime/` ([assets/lanes/](../skills/port-any-game/assets/lanes/)) |
-| [scripts/toolchain.lock.json](../skills/port-any-game/scripts/toolchain.lock.json) | Pinned third-party runtimes (Ruffle, js-dos) that lanes name in `runtime.tool` |
+| [scripts/toolchain.lock.json](../skills/port-any-game/scripts/toolchain.lock.json) | Pinned third-party runtimes (Ruffle, js-dos, EasyRPG) that lanes name in `runtime.tool` |
 
 ## The lane module contract
 
@@ -59,7 +60,7 @@ Other optional fields exist for tests and tools (`dosboxConf` on dos-jsdos).
 
 `pack` hashes the adapter plus the runtime files into `dist/runtime/<lane>-<hash8>/` (served immutable). `runtime.tool` must be a key of `toolchain.lock.json` and installed (`pag setup <tool> --yes`, which leaves a `.ok` marker); `runtime.files` lists paths relative to the tool folder. Licence text of the tool is written to the dist by `pack`.
 
-The adapter is an ES module whose default export is `{id, start(ctx), ...}`. The shell passes a `ctx` (host element, audio context, `reportFrame`, `reportError`, `reportPageError`, the OPFS-mounted game files). Optional adapter methods: `saveNow()`, which `verify` calls once to exercise the lane's own save path. It reports `lane saveNow ran` if it succeeds, `lane save path not exercised` if the adapter has none, and fails the `save` check if it throws. Adapters must not touch the DOM at module top level, because Node tests and `build` import their helper exports (`dosPath`, `swfFromProjector`).
+The adapter is an ES module whose default export is `{id, start(ctx), ...}`. The shell passes a `ctx` (host element, audio context, `reportFrame`, `reportError`, `reportPageError`, the OPFS-mounted game files). Optional adapter methods: `saveNow()`, which `verify` calls once to exercise the lane's own save path. It reports `lane saveNow ran` if it succeeds, `lane save path not exercised` if the adapter has none, and fails the `save` check if it throws. Adapters must not touch the DOM at module top level, because Node tests and `build` import their helper exports (`dosPath`, `swfFromProjector`, `gencacheIndex`).
 
 ## Ranking
 
@@ -137,13 +138,35 @@ DOS programs run on js-dos 8.5.4 (DOSBox compiled to wasm, **GPL-2.0**), bring-y
 - **Saves:** DOSBox writes into the worker's in-memory disk. `saveNow()` calls `ci.persist()` (the files changed since start, as a zip) and stores it in OPFS under `shell.json` `data.saves`; the next start mounts it as a second bundle. It also runs every 30 s, on `pause()` (tab hidden) and on `pagehide`. `verify` calls `saveNow()` to exercise this.
 - `shell()` returns `needs_coi: false`, `lane_config`, and the Click/Enter/Space verify inputs.
 
+## M2 lanes
+
+| Lane | Rung | Data mode | Acks | Detects |
+|---|---|---|---|---|
+| `rt-easyrpg` | 1 | `byo` | `ACK_PRIVATE_USE_ONLY`, `ACK_RUNTIME_LICENSE` | engine `rpgmaker-2k` -> GO |
+
+### rt-easyrpg
+
+RPG Maker 2000/2003 games run on EasyRPG Player 0.8.1.1 (the upstream web build, **GPL-3.0-or-later**, tool `easyrpg-player-js`), bring-your-own data. Agent runbook: [easyrpg.md](../skills/port-any-game/references/lanes/easyrpg.md).
+
+- **Runtime:** `runtime.files` is `index.js` and `index.wasm`, from the user's tool cache, never vendored. The lock pins `COPYING` as an extra; `pack` writes it with the source offer into `LICENSES/easyrpg-player-js.txt`.
+- **Build:** requires the tool installed (`pag setup easyrpg --yes`). It writes `build/lane.json`:
+  - `root`: the folder holding the shallowest `RPG_RT.ldb` (any case), relative to `game/`, `''` at the top;
+  - `game`: a slug of the port folder's name (`[a-z0-9-]`, at most 40 characters, else `game`). It is the player's id: its `games/<id>/` URLs and its IndexedDB save store;
+  - `encoding`: `RPG_RT.ini` `[EasyRPG] Encoding`, only when set (passed as `--encoding`);
+  - `rtp`: `full-package` when `[RPG_RT] FullPackageFlag=1`, else `needs-rtp`. `needs-rtp` makes the verdict HARD, not NO (the game runs; missing RTP assets show as a checkerboard), and appends the four-step fix (copy, merge the user's RTP, set the flag, `pag new` the copy) to `PORTING_LOG.md`.
+  - No `--engine` from `RPG_RT.exe` yet: the player guesses the engine from the database.
+- **Adapter:** creates `<canvas id="canvas">`, placed absolutely in the host (the player sizes its drawing buffer to the canvas box, which in the host's grid would grow past the host). Before loading `index.js` it replaces `window.XMLHttpRequest` with a shim: the player fetches every game file as `games/<game>/<path>` (`emscripten_async_wget2`). The shim answers `index.json` with a generated gencache v2 index (`gencacheIndex`: real names under lower-case keys, so `TITLE/TITLE.PNG` is found for `Title/Title`), every other path from `ctx.files` under `root` (case-insensitive), 404 for a missing file, and refuses any other URL (the wasm comes through `fetch`). `onRuntimeInitialized` replaces the player's arguments (`--save-path Save --game <id>`, plus `--encoding`), so the page's query string never reaches it, and silences `setStatus`. Upstream's pre-js overrides a `setStatus` passed to the factory and writes its start-up messages into the shell's `#status`; the shell resets its line when `start()` returns.
+- **Frames:** `postMainLoop` reports frames and `preMainLoop` returns false while paused. The player's own start-up (black, the EasyRPG logo, black again; about 1.5 s) is not counted, as for Ruffle's splash (R46): a 16x12 copy of the canvas, taken after each drawn frame, tells the phases apart. A game that opens on black is counted after 600 frames.
+- **Saves:** IDBFS at `/easyrpg/<game>/Save`, synced by the player after each save. `saveNow()` forces `FS.syncfs(false)`; `verify` calls it.
+- `shell()` returns `lane_config`, `csp: {'script-src': ["'unsafe-eval'"]}` (embind builds its glue with `new Function`), `needs_coi: false`, and `verify` with `inputs: ['Enter']`, `target_fps: 30`.
+
 ## Stub lanes
 
-[stubs.mjs](../skills/port-any-game/scripts/lanes/stubs.mjs) lists every lane the design plans but M1 does not build, as descriptors with `available: false`, `milestone` and a placeholder checklist. They still run `detect`, so the survey can say "best fit rt-scummvm, available in M2". Triggers come from survey engine ids (`engines`), a 32-bit PE main exe (`pe32`, always HARD), or `always`. A `hard` trigger yields HARD instead of GO.
+[stubs.mjs](../skills/port-any-game/scripts/lanes/stubs.mjs) lists every lane the design plans that is not built yet, as descriptors with `available: false`, `milestone` and a placeholder checklist. They still run `detect`, so the survey can say "best fit rt-scummvm, available in M2". Triggers come from survey engine ids (`engines`), a 32-bit PE main exe (`pe32`, always HARD), or `always`. A `hard` trigger yields HARD instead of GO.
 
 | Milestone | Lanes |
 |---|---|
-| M2 | rt-easyrpg, rt-scummvm, rt-idtech, rebuild-renpy, rebuild-love, remote-play |
+| M2 | rt-scummvm, rt-idtech, rebuild-renpy, rebuild-love, remote-play |
 | M3 | win-bottleship, win-boxedwine, win-dosboxx, win-v86 |
 | M4 | rt-mkxpz, rt-ags, rt-dirplayer, rt-butterscotch, rt-cheerpj, rebuild-godot, src-port, src-engine-export, rewrite-html5, decomp-rebuild |
 | M5 | recomp-x86 |
@@ -159,6 +182,6 @@ Stub acks include `ACK_OS_LICENSE`, `ACK_GREY_DECOMPILE`, `ACK_GREY_ASSET_EXTRAC
 5. **Pin the runtime**, if any: add an entry to `scripts/toolchain.lock.json` (version, hash, `licenseFile`, `license`), make `pag setup <name>` know it, and list `runtime.files`. Keep it out of the repo.
 6. **Register it:** import it in `scripts/lanes/index.mjs`, and if it replaces a stub delete that entry from `stubs.mjs`.
 7. **Acks.** Every id in `acks` must exist in `ACK_IDS` in [ack.mjs](../skills/port-any-game/scripts/ack.mjs). Add new ones there (and see [safety-and-policy.md](safety-and-policy.md)).
-8. **Tests.** Add `test/lanes/<id>.test.mjs` (see the four existing ones for `detect`, `build` and adapter helpers) and adjust the lane-descriptor checks in [test/survey/survey.test.mjs](../test/survey/survey.test.mjs). The pack and verify end-to-end paths use the `lane-test` fixture in `test/fixtures/lane-test`; use it as a model, or pass `laneModule` to `pack()`/`build` in unit tests.
+8. **Tests.** Add `test/lanes/<id>.test.mjs` (see the existing ones for `detect`, `build` and adapter helpers) and adjust the lane-descriptor checks in [test/survey/survey.test.mjs](../test/survey/survey.test.mjs). The pack and verify end-to-end paths use the `lane-test` fixture in `test/fixtures/lane-test`; use it as a model, or pass `laneModule` to `pack()`/`build` in unit tests.
 9. **Agent runbook.** Add `skills/port-any-game/references/lanes/<name>.md` (when to use, inputs, steps, known failures) and link it from `SKILL.md`.
 10. **Verify for real.** `pag new`, `build`, `pack`, `verify --soak 5` on a legally owned or free sample, and record the outcome in the roadmap/decisions docs ([decisions.md](decisions.md)).

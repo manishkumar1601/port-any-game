@@ -72,4 +72,5 @@ a README.txt) and `<port>/package/<id>.zip`.
 ## Saves
 Saves live in the browser's storage for that address. Clearing the site's data deletes them, and a different port
 means different storage. There is no save export button yet. DOS builds copy the game's own save files into that storage every 30 seconds and when
-the tab is hidden or closed ([dos](lanes/dos.md)).
+the tab is hidden or closed ([dos](lanes/dos.md)). RPG Maker 2000/2003 builds write them there as the game saves
+([easyrpg](lanes/easyrpg.md)).

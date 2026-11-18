@@ -1,4 +1,4 @@
-// Every spec §6 lane not built in M1. Descriptors only: available:false + milestone.
+// Every spec §6 lane not built yet. Descriptors only: available:false + milestone.
 // trig: engines = survey engine ids that trigger the lane; pe32 = main exe is 32-bit PE; always = any game; hard = HARD not GO.
 const L = (id, rung, milestone, dataModes, acks, odds, trig = {}) => ({
   id, rung, available: false, milestone, dataModes, acks, odds, checklist: [`Not available until ${milestone}`],
@@ -16,7 +16,6 @@ const GREY = ['ACK_PRIVATE_USE_ONLY', 'ACK_RUNTIME_LICENSE', 'ACK_GREY_DECOMPILE
 const OS = ['ACK_RUNTIME_LICENSE', 'ACK_OS_LICENSE'];
 
 export default [
-  L('rt-easyrpg', 1, 'M2', ['byo'], RT, '85-95%', { engines: ['rpgmaker-2k'] }),
   L('rt-scummvm', 1, 'M2', ['byo'], RT, '80-95%', { engines: ['scummvm-candidate'] }),
   L('rt-idtech', 1, 'M2', ['byo'], RT, '70-90%', { engines: ['idtech-doom', 'idtech-quake', 'goldsrc', 'build'] }),
   L('rt-mkxpz', 2, 'M4', ['byo'], RT, '55-75%', { engines: ['rpgmaker-xp-vx'] }),

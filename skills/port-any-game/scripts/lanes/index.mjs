@@ -3,9 +3,10 @@ import webExtract from './web-extract.mjs';
 import knownPort from './known-port.mjs';
 import rtRuffle from './rt-ruffle.mjs';
 import dosJsdos from './dos-jsdos.mjs';
+import rtEasyrpg from './rt-easyrpg.mjs';
 import stubs from './stubs.mjs';
 
-export const LANES = Object.fromEntries([webExtract, knownPort, rtRuffle, dosJsdos, ...stubs].map((l) => [l.id, l]));
+export const LANES = Object.fromEntries([webExtract, knownPort, rtRuffle, dosJsdos, rtEasyrpg, ...stubs].map((l) => [l.id, l]));
 
 const VRANK = { GO: 0, HARD: 1, NO: 2 };
 

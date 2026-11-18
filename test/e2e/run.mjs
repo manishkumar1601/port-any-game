@@ -28,6 +28,7 @@ const { makeWebGame } = await import('../fixtures/make-web-game.mjs');
 const { makeAnimSwf } = await import('../fixtures/make-swf.mjs');
 const { makeAnimCom } = await import('../fixtures/make-dos-com.mjs');
 const { makeMZ } = await import('../fixtures/make-pe.mjs');
+const { makeRm2k } = await import('../fixtures/make-rm2k.mjs');
 const { ensureTool } = await import(`${SCRIPTS}/setup.mjs`);
 const { startServer } = await import(`${SCRIPTS}/serve.mjs`);
 const { openCdp } = await import(`${SCRIPTS}/verify/driver-cdp.mjs`);
@@ -225,10 +226,9 @@ async function dosByo() {
   assert.match(lic, /GNU GENERAL PUBLIC LICENSE\s+Version 2, June 1991/, 'the GPL-2.0 text itself');
 }
 
-// I4/R64: a file written into the DOS disk survives a reload (ci.persist -> OPFS saves folder -> second bundle), and a
-// later save keeps the earlier one. Drives the packed build directly (one browser profile, so OPFS survives reloads).
-async function dosSaves() {
-  const r = await dosRun();
+// Drives a packed BYO build directly (one browser profile, so OPFS survives reloads): opens it, plays to the first
+// game frame, then runs fn({d, ev, play}).
+async function inBrowser(r, fn) {
   const manifest = JSON.parse(readFileSync(path.join(r.distDir, 'pag-manifest.json'), 'utf8'));
   const srv = await startServer({ root: r.distDir, fixtureDir: path.join(r.portDir, 'game'), fixtureIndex: manifest.files.map((f) => ({ path: f.path, size: f.size })), log: () => {} });
   const d = opts.runner === 'playwright' ? await withToolCache(() => openPlaywright({ headless: !opts.headed }))
@@ -243,8 +243,21 @@ async function dosSaves() {
       await until(() => window.__shell?.state === 'ready', 'ready');
       const at = await ev(() => { const b = document.getElementById('play').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; });
       await d.click(at.x, at.y);
-      await until(() => window.__shell?.state === 'running' && window.__shell.stats.gameFrames > 0, 'the first DOS frame');
+      await until(() => window.__shell?.state === 'running' && window.__shell.stats.gameFrames > 0, 'the first game frame');
     };
+    await d.open(`${srv.url}/?verify=1&verify_import=/__fixture/`);
+    await play();
+    return await fn({ d, ev, play });
+  } finally {
+    await d.close();
+    await srv.close();
+  }
+}
+
+// I4/R64: a file written into the DOS disk survives a reload (ci.persist -> OPFS saves folder -> second bundle), and a
+// later save keeps the earlier one.
+async function dosSaves() {
+  await inBrowser(await dosRun(), async ({ d, ev, play }) => {
     const save = (name, text) => ev(async ([n, t]) => {
       await window.__shell.lane.debugCi().fsWriteFile(n, new TextEncoder().encode(t));
       return window.__shell.lane.saveNow();
@@ -256,8 +269,6 @@ async function dosSaves() {
       for (const n of ns) out.push(await one(n).catch((e) => `error: ${e.message}`));
       return out;
     }, names);
-    await d.open(`${srv.url}/?verify=1&verify_import=/__fixture/`);
-    await play();
     assert.ok((await save('PAGSAVE1.DAT', 'one')).bytes > 0, 'saveNow wrote the changes');
     await d.reload();
     await play();
@@ -266,10 +277,46 @@ async function dosSaves() {
     await d.reload();
     await play();
     assert.deepEqual(await read(['PAGSAVE1.DAT', 'PAGSAVE2.DAT']), ['one', 'two'], 'a later save keeps the earlier one');
-  } finally {
-    await d.close();
-    await srv.close();
+  });
+}
+
+// ---- rt-easyrpg (BYO): the adapter answers the player's file requests from OPFS; dist must hold no game bytes.
+// The fixture's title is TITLE/TITLE.PNG while the database names "Title": the player finds it only through index.json.
+const erpgRun = () => (runs.erpg ??= pipeline('rt-easyrpg', (d) => makeRm2k(d, { upperCaseTitle: true }), { mode: 'byo', tools: ['easyrpg'] }));
+
+async function easyrpgByo() {
+  const r = await erpgRun();
+  assert.equal(r.report.status, 'pass', failing(r.report));
+  assert.equal(r.built.verdict, 'GO');
+  assert.match(r.report.checks.find((c) => c.name === 'save').detail, /lane saveNow ran/); // R64
+  console.log(`# rt-easyrpg: ${r.report.checks.filter((c) => ['ready', 'fps', 'blank', 'frozen', 'input'].includes(c.name)).map((c) => `${c.name}: ${c.detail}`).join(' | ')}`);
+  const files = distFiles(r.distDir);
+  const rt = files.map((f) => path.relative(r.distDir, f).split(path.sep).join('/')).filter((f) => f.startsWith('runtime/')).sort();
+  assert.match(rt[0] ?? '', /^runtime\/rt-easyrpg-[0-9a-f]{8}\//);
+  assert.deepEqual(rt.map((f) => f.replace(/^runtime\/[^/]+\//, '')), ['adapter.js', 'index.js', 'index.wasm']);
+  const game = distFiles(path.join(r.portDir, 'game')).map((f) => readFileSync(f)).filter((b) => b.length > 20); // the 15-byte map tree is too generic
+  for (const f of files) {
+    const b = readFileSync(f);
+    assert.equal(game.some((g) => b.includes(g)), false, `game bytes in dist: ${f}`);
   }
+  assert.equal(existsSync(path.join(r.distDir, 'game')), false, 'a byo dist has no game/ folder');
+  const lic = readFileSync(path.join(r.distDir, 'LICENSES', 'easyrpg-player-js.txt'), 'utf8');
+  assert.match(lic, /^easyrpg-player-js 0\.8\.1\.1\nLicense: GPL-3\.0-or-later\nSource: https:\/\/github\.com\/EasyRPG\/Player\n/);
+  assert.match(lic, /complete corresponding source code is available at https:\/\/github\.com\/EasyRPG\/Player \(tag\/version 0\.8\.1\.1\)/);
+  assert.match(lic, /GNU GENERAL PUBLIC LICENSE\s+Version 3/, 'the GPL-3.0 text itself (COPYING)');
+  // Review Focus 1: a title the player misses is logged as "DL Failure" (a 404) or "Cannot find" (not in index.json).
+  const missed = readFileSync(path.join(r.report.reportDir, 'console.log'), 'utf8').split('\n').filter((l) => /DL Failure|Cannot find/i.test(l));
+  assert.deepEqual(missed.filter((l) => /title/i.test(l)), [], missed.join('\n'));
+}
+
+// Upstream's pre-js writes its own messages into any #status element; once the game runs, the shell's line must stand.
+async function easyrpgStatus() {
+  await inBrowser(await erpgRun(), async ({ ev }) => {
+    await sleep(1000);
+    const status = await ev(() => document.getElementById('status').textContent);
+    assert.notEqual(status, 'Running...');
+    assert.doesNotMatch(status, /Running|Downloading|Preparing|Exception thrown/);
+  });
 }
 
 const LANE_CASES = {
@@ -287,6 +334,10 @@ const LANE_CASES = {
   'dos-jsdos': [
     { name: 'dos-jsdos BYO fixture passes verify with zero game bytes in dist', run: dosByo },
     { name: 'dos-jsdos saves survive a reload (ci.persist to OPFS, second bundle)', run: dosSaves },
+  ],
+  'rt-easyrpg': [
+    { name: 'rt-easyrpg BYO fixture passes verify with zero game bytes in dist', run: easyrpgByo },
+    { name: 'rt-easyrpg keeps the shell status line', run: easyrpgStatus },
   ],
 };
 

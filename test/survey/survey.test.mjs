@@ -67,24 +67,25 @@ test('UPX is WARN and adds ACK', async () => {
 });
 
 test('primary_lane skips unavailable lanes', () => {
-  const unavailable = decide({ engines: [{ id: 'rpgmaker-2k', confidence: 0.9 }], executables: [], protection: [], catalog_matches: [] });
-  assert.ok(unavailable.lanes.some((l) => l.lane === 'rt-easyrpg' && l.available === false));
+  const unavailable = decide({ engines: [{ id: 'scummvm-candidate', confidence: 0.9 }], executables: [], protection: [], catalog_matches: [] });
+  assert.ok(unavailable.lanes.some((l) => l.lane === 'rt-scummvm' && l.available === false));
   assert.equal(unavailable.verdict.primary_lane, null);
   assert.notEqual(unavailable.verdict.overall, 'STOP');
-  assert.match(unavailable.verdict.reasons.join('\n'), /rt-easyrpg.*available in M2/);
+  assert.match(unavailable.verdict.reasons.join('\n'), /rt-scummvm.*available in M2/);
 
-  // an unavailable lane that outranks an available one must not become primary
-  const both = decide({ engines: [{ id: 'rpgmaker-2k', confidence: 0.9 }, { id: 'flash-swf', confidence: 0.9 }], executables: [], protection: [], catalog_matches: [] });
-  assert.equal(both.verdict.primary_lane, 'rt-ruffle');
-  assert.ok(LANES['rt-easyrpg'] && LANES['rt-easyrpg'].available === false);
-  assert.ok(rankLanes({ engines: [{ id: 'flash-swf' }] }).every((l) => l.lane !== 'rt-easyrpg'));
+  // an unavailable lane that outranks an available one (GO before HARD) must not become primary
+  const both = decide({ engines: [{ id: 'scummvm-candidate', confidence: 0.9 }], executables: [], protection: [], catalog_matches: [{ game_id: 'x', tier: 'title', needs_confirm: true }] });
+  assert.equal(both.lanes[0].lane, 'rt-scummvm');
+  assert.equal(both.verdict.primary_lane, 'known-port');
+  assert.ok(LANES['rt-scummvm'] && LANES['rt-scummvm'].available === false);
+  assert.ok(rankLanes({ engines: [{ id: 'flash-swf' }] }).every((l) => l.lane !== 'rt-scummvm'));
 });
 
-test('every M1 lane descriptor has checklist items and acks', () => {
-  for (const id of ['web-extract', 'known-port', 'rt-ruffle', 'dos-jsdos']) {
+test('every M1 and M2 lane descriptor has checklist items and acks', () => {
+  for (const [id, milestone] of [['web-extract', 'M1'], ['known-port', 'M1'], ['rt-ruffle', 'M1'], ['dos-jsdos', 'M1'], ['rt-easyrpg', 'M2']]) {
     const l = LANES[id];
     assert.equal(l.available, true);
-    assert.equal(l.milestone, 'M1');
+    assert.equal(l.milestone, milestone);
     assert.ok(l.checklist.length >= 3 && l.checklist.every((x) => typeof x === 'string'));
     assert.ok(l.acks.length >= 1);
     assert.equal(typeof l.detect, 'function');

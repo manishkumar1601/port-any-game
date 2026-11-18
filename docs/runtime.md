@@ -119,6 +119,8 @@ Adapters today: [rt-ruffle](../skills/port-any-game/assets/lanes/rt-ruffle/adapt
 frames counted from rendered movie time, unwraps Flash projectors),
 [dos-jsdos](../skills/port-any-game/assets/lanes/dos-jsdos/adapter.js) (js-dos raw emulators API, bundle zipped in the
 browser, own key routing),
+[rt-easyrpg](../skills/port-any-game/assets/lanes/rt-easyrpg/adapter.js) (EasyRPG Player web build, its file requests
+answered from OPFS by an XHR shim),
 [web-extract](../skills/port-any-game/assets/lanes/web-extract/adapter.js) (same-origin iframe on `game/index.html`,
 frames and errors from an injected `__pag_hook.js`). See [lanes.md](lanes.md).
 
@@ -287,6 +289,7 @@ tools.
 | Ruffle (rt-ruffle) | Ruffle's own browser storage for the origin; the adapter has no save code. |
 | web-extract | The game's own `localStorage`/IndexedDB in the same origin (the iframe is same-origin). |
 | DOS (dos-jsdos) | DOSBox writes into the worker's in-memory disk. The adapter calls `ci.persist()`, which returns the files changed since start as a zip, and stores it as `dosbox-changes.zip` under OPFS `data.saves` (`/saves/<id>`). On next start it is passed to js-dos as a second bundle, so changed files overwrite the originals. Saved every 30 s, on pause (tab hidden), on `pagehide`, and on demand through `saveNow()`. A crash within 30 s of a save can lose it. |
+| RPG Maker 2000/2003 (rt-easyrpg) | EasyRPG Player keeps saves in IndexedDB (IDBFS at `/easyrpg/<game>/Save`, one database per `lane_config.game`) and syncs after each save; `saveNow()` forces a sync. |
 
 verify's `save` check proves the storage round trip (self-test plus a `localStorage` token across a reload) and, for
 lanes with `saveNow`, that it ran. Lanes without one report "lane save path not exercised".

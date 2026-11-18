@@ -45,7 +45,7 @@ Based on US, EU, UK, Indian and Japanese law (research note 04, Part B):
 | Lane kind | Verdict cap | Acknowledgements |
 |---|---|---|
 | already-web extract (`web-extract`; `known-port` uses the same) | GO | `ACK_PRIVATE_USE_ONLY` |
-| engine runtime (Ruffle now; ScummVM, EasyRPG, AGS, LÖVE, ONScripter, Ren'Py later) | GO | `ACK_PRIVATE_USE_ONLY`, `ACK_RUNTIME_LICENSE` |
+| engine runtime (Ruffle and EasyRPG now; ScummVM, AGS, LÖVE, ONScripter, Ren'Py later) | GO | `ACK_PRIVATE_USE_ONLY`, `ACK_RUNTIME_LICENSE` |
 | DOS emulation (`dos-jsdos`) | GO | same as engine runtime; no OS images except FreeDOS or the MIT-licensed MS-DOS |
 | source port | GO | same as engine runtime; the user supplies the data |
 | engine re-export (Godot / GDRE) | GO/HARD | + `ACK_GREY_ASSET_EXTRACT` |
