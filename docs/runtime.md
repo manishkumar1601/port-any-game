@@ -124,7 +124,7 @@ answered from OPFS by an XHR shim),
 [rebuild-love](../skills/port-any-game/assets/lanes/rebuild-love/adapter.js) (love.js compat build, the `.love` from OPFS
 written into its file system),
 [web-extract](../skills/port-any-game/assets/lanes/web-extract/adapter.js) (same-origin iframe on `game/index.html`,
-frames and errors from an injected `__pag_hook.js`). See [lanes.md](lanes.md).
+frames and errors from an injected `__pag_hook.js`; rebuild-renpy reuses it for the Ren'Py SDK's web build). See [lanes.md](lanes.md).
 
 ### Input
 
@@ -290,6 +290,7 @@ tools.
 |---|---|
 | Ruffle (rt-ruffle) | Ruffle's own browser storage for the origin; the adapter has no save code. |
 | web-extract | The game's own `localStorage`/IndexedDB in the same origin (the iframe is same-origin). |
+| Ren'Py (rebuild-renpy) | Ren'Py's own IDBFS (IndexedDB database `/home/web_user/.renpy`, one folder per `config.save_directory`), synced after each save; no adapter `saveNow`. Without `config.save_directory` saves stay in memory (`pag build` warns). |
 | DOS (dos-jsdos) | DOSBox writes into the worker's in-memory disk. The adapter calls `ci.persist()`, which returns the files changed since start as a zip, and stores it as `dosbox-changes.zip` under OPFS `data.saves` (`/saves/<id>`). On next start it is passed to js-dos as a second bundle, so changed files overwrite the originals. Saved every 30 s, on pause (tab hidden), on `pagehide`, and on demand through `saveNow()`. A crash within 30 s of a save can lose it. |
 | RPG Maker 2000/2003 (rt-easyrpg) | EasyRPG Player keeps saves in IndexedDB (IDBFS at `/easyrpg/<game>/Save`, one database per `lane_config.game`) and syncs after each save; `saveNow()` forces a sync. |
 | LÖVE (rebuild-love) | love.js keeps `love.filesystem` saves in IDBFS (IndexedDB database `/home/web_user/love`, one folder per `t.identity`) and writes them back only from its own `beforeunload` listener. The adapter calls that listener directly every 30 s, on pause (tab hidden), on `pagehide` and through `saveNow()`; a synthetic `beforeunload` event would make SDL quit the game. A browser killed within 30 s of a save can lose it. |

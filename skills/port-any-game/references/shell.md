@@ -74,4 +74,4 @@ Saves live in the browser's storage for that address. Clearing the site's data d
 means different storage. There is no save export button yet. DOS builds copy the game's own save files into that storage every 30 seconds and when
 the tab is hidden or closed ([dos](lanes/dos.md)). RPG Maker 2000/2003 builds write them there as the game saves
 ([easyrpg](lanes/easyrpg.md)). LÖVE builds write them every 30 seconds and when the tab is hidden or closed
-([love](lanes/love.md)).
+([love](lanes/love.md)). Ren'Py builds write them there as the game saves ([renpy](lanes/renpy.md)).

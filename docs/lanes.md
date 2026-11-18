@@ -2,7 +2,7 @@
 
 A **lane** is one way of getting a game running in the browser. `pag survey` ranks the lanes that fit a game, `pag new` picks one, `pag build` runs its build step, and `pack` bundles its adapter and runtime into the shell. This page describes the lane module contract, the ranking, the four lanes built in M1, the M2 lanes, the planned stubs, and how to add a lane.
 
-Related: [survey-and-catalog.md](survey-and-catalog.md) (how detection feeds the lanes), [runtime.md](runtime.md) (shell, `shell.json`, pack), [safety-and-policy.md](safety-and-policy.md) (acks and data modes), [verify.md](verify.md). The agent-facing, per-lane runbooks are in [references/lanes/](../skills/port-any-game/references/lanes/): [web-extract.md](../skills/port-any-game/references/lanes/web-extract.md), [known-ports.md](../skills/port-any-game/references/lanes/known-ports.md), [runtimes.md](../skills/port-any-game/references/lanes/runtimes.md) (Ruffle), [dos.md](../skills/port-any-game/references/lanes/dos.md), [easyrpg.md](../skills/port-any-game/references/lanes/easyrpg.md), [love.md](../skills/port-any-game/references/lanes/love.md). Do not copy those into this repo doc; they are what the agent reads at run time.
+Related: [survey-and-catalog.md](survey-and-catalog.md) (how detection feeds the lanes), [runtime.md](runtime.md) (shell, `shell.json`, pack), [safety-and-policy.md](safety-and-policy.md) (acks and data modes), [verify.md](verify.md). The agent-facing, per-lane runbooks are in [references/lanes/](../skills/port-any-game/references/lanes/): [web-extract.md](../skills/port-any-game/references/lanes/web-extract.md), [known-ports.md](../skills/port-any-game/references/lanes/known-ports.md), [runtimes.md](../skills/port-any-game/references/lanes/runtimes.md) (Ruffle), [dos.md](../skills/port-any-game/references/lanes/dos.md), [easyrpg.md](../skills/port-any-game/references/lanes/easyrpg.md), [love.md](../skills/port-any-game/references/lanes/love.md), [renpy.md](../skills/port-any-game/references/lanes/renpy.md). Do not copy those into this repo doc; they are what the agent reads at run time.
 
 ## Where lanes live
 
@@ -10,10 +10,10 @@ Related: [survey-and-catalog.md](survey-and-catalog.md) (how detection feeds the
 |---|---|
 | [scripts/lanes/index.mjs](../skills/port-any-game/scripts/lanes/index.mjs) | Registry (`LANES`, keyed by `id`) and `rankLanes(survey)` |
 | [scripts/lanes/web-extract.mjs](../skills/port-any-game/scripts/lanes/web-extract.mjs), [known-port.mjs](../skills/port-any-game/scripts/lanes/known-port.mjs), [rt-ruffle.mjs](../skills/port-any-game/scripts/lanes/rt-ruffle.mjs), [dos-jsdos.mjs](../skills/port-any-game/scripts/lanes/dos-jsdos.mjs) | The four M1 lanes |
-| [scripts/lanes/rt-easyrpg.mjs](../skills/port-any-game/scripts/lanes/rt-easyrpg.mjs), [rebuild-love.mjs](../skills/port-any-game/scripts/lanes/rebuild-love.mjs) | The M2 lanes |
+| [scripts/lanes/rt-easyrpg.mjs](../skills/port-any-game/scripts/lanes/rt-easyrpg.mjs), [rebuild-love.mjs](../skills/port-any-game/scripts/lanes/rebuild-love.mjs), [rebuild-renpy.mjs](../skills/port-any-game/scripts/lanes/rebuild-renpy.mjs) | The M2 lanes |
 | [scripts/lanes/stubs.mjs](../skills/port-any-game/scripts/lanes/stubs.mjs) | Descriptor-only lanes for later milestones |
 | `assets/lanes/<id>/adapter.js` | The browser adapter, copied into `dist/runtime/` ([assets/lanes/](../skills/port-any-game/assets/lanes/)) |
-| [scripts/toolchain.lock.json](../skills/port-any-game/scripts/toolchain.lock.json) | Pinned third-party runtimes (Ruffle, js-dos, EasyRPG, love.js) that lanes name in `runtime.tool` |
+| [scripts/toolchain.lock.json](../skills/port-any-game/scripts/toolchain.lock.json) | Pinned third-party runtimes (Ruffle, js-dos, EasyRPG, love.js, the Ren'Py SDK) that lanes name in `runtime.tool` |
 
 ## The lane module contract
 
@@ -33,9 +33,9 @@ A lane is a default-exported object. The registry reads it in three places: surv
 | `build(portDir, opts)` | async fn | Optional. Run by `pag build`; prints its return value as JSON. A lane without `build` exits 1 with "has no build step yet" |
 | `shell(port, {portDir})` | fn | Optional. Contributes to `shell.json` (see below) |
 | `runtime` | `{tool, files?}` | Optional. The pinned tool whose files `pack` copies next to the adapter. A getter is fine (Ruffle computes its file list lazily) |
-| `adapter` | path | Optional override; default is `assets/lanes/<id>/adapter.js` |
+| `adapter` | path | Optional override; default is `assets/lanes/<id>/adapter.js` (rebuild-renpy uses web-extract's) |
 | `external` | boolean | Known-port only: the lane routes to a web port that already exists, so `pack` refuses ("nothing to pack") |
-| `requiresBuild` | boolean | `pack` must find `build/game` (web-extract); it will not pack the raw install |
+| `requiresBuild` | boolean | `pack` must find `build/game` (web-extract, rebuild-renpy); it will not pack the raw install |
 
 Other optional fields exist for tests and tools (`dosboxConf` on dos-jsdos).
 
@@ -144,6 +144,7 @@ DOS programs run on js-dos 8.5.4 (DOSBox compiled to wasm, **GPL-2.0**), bring-y
 |---|---|---|---|---|
 | `rt-easyrpg` | 1 | `byo` | `ACK_PRIVATE_USE_ONLY`, `ACK_RUNTIME_LICENSE` | engine `rpgmaker-2k` -> GO |
 | `rebuild-love` | 3 | `byo` | `ACK_PRIVATE_USE_ONLY`, `ACK_RUNTIME_LICENSE` | engine `love` -> GO (verdict from `build`) |
+| `rebuild-renpy` | 3 | `bundled` | `ACK_PRIVATE_USE_ONLY`, `ACK_RUNTIME_LICENSE` | engine `renpy`: 8.x up to the pinned SDK -> GO; newer, 7.x, older or unknown -> HARD |
 
 ### rt-easyrpg
 
@@ -174,13 +175,30 @@ LÖVE games run on love.js 11.4.1 (LÖVE 11.4 compiled to wasm, **MIT**, tool `l
 - **Saves:** LÖVE's IDBFS at `/home/web_user/love/<identity>`. love.js writes it to IndexedDB only from a `beforeunload` listener it adds while `Love()` runs, and does not export `FS`. A synthetic `beforeunload` cannot be used: SDL answers it with `SDL_APP_TERMINATING` and LÖVE quits. So the adapter keeps that listener (it wraps `window.addEventListener` only during the synchronous `Love()` call) and `saveNow()` calls it directly; it throws before love.js has started. It runs every 30 s, on `pause()` and on `pagehide`.
 - `shell()` returns `lane_config`, `needs_coi: false` (no CSP relaxation), and `verify` with `inputs: ['Click', 'Enter', 'Space']`, `target_fps: 30`.
 
+### rebuild-renpy
+
+Ren'Py 8 games are rebuilt by the pinned Ren'Py 8.6.1 SDK's own headless web build (tool `renpy`: the SDK zip plus its web support zip, **MIT AND LGPL-2.1-or-later**) and served like web-extract. Bundled data: `game.zip` in the build holds the user's game. Agent runbook: [renpy.md](../skills/port-any-game/references/lanes/renpy.md).
+
+- **Runtime:** `runtime` is `{tool: 'renpy', files: []}`. The web runtime (`renpy.js`, `renpy.wasm`, `renpy.data`) comes inside the build output, so no SDK file is copied into `dist/runtime/`; naming the tool makes `pack` write the SDK's `LICENSE.txt` into `LICENSES/renpy.txt`. `requiresBuild` is set and `adapter` is web-extract's adapter (same-origin iframe on `game/index.html`).
+- **Detect:** engine `renpy` with the survey's version (from `renpy/vc_version.py`), judged by `renpyVerdict(version, sdk)` against the lock's `renpy.version` (read once at module load, so `detect` stays pure). Segments compare numerically, over the SDK's segment count: 8.x at or below the SDK is GO; newer is HARD ("needs Ren'Py <v> or newer; pinned SDK is <sdk>"); 7.x is HARD ("needs the Ren'Py 7 SDK, not pinned yet"); 6.x or older is HARD; unknown is HARD ("version unknown; pag build checks game/script_version.txt").
+- **Build:** requires the tool installed (`pag setup renpy --yes`) and a `game/` folder at the top of the install.
+  1. Version: the survey's, else `game/script_version.txt` (`scriptVersion`: `(8, 1, 3)` -> `8.1.3`), then `renpyVerdict`. The build runs for every verdict.
+  2. Copies only the install's `game/` (symbolic links skipped) into `build/renpy-project/game/`; the SDK writes its log, cache and `.rpyc` files into the project it builds.
+  3. Runs `renpyCommand(sdk, project, tmp)`: `<sdk>/lib/py3-windows-x86_64/python.exe`, `py3-mac-universal/python` or `py3-linux-<x86_64|aarch64>/python` with `<sdk>/renpy.py <sdk>/launcher web_build <project> --destination build/.tmp-<pid>`. No shell; `SDL_VIDEODRIVER=dummy` and `SDL_AUDIODRIVER=dummy`; a 10 minute timeout; output captured (its progress lines end in `\r`). The SDK runs the game's init Python once to read its settings (see [safety-and-policy.md](safety-and-policy.md#1-the-legal-stance)).
+  4. A non-zero exit throws `Ren'Py web build failed (exit <code>): <last 20 lines>`; "Web support is not available" (the SDK's `web/` does not match its launcher) throws its own message naming `pag setup renpy --yes`. A failure removes the temp folder and leaves no `build/game`; `build/renpy-project/` stays for its `log.txt` and `traceback.txt`.
+  5. `cleanWebBuild(tmp)` deletes `*.symbols` and the PWA layer (`service-worker.js`, `manifest.json`, `pwa_catalog.json`, `icons/`) and removes the `navigator.serviceWorker.register(...)` call from `index.html`'s inline script, every other byte unchanged. Then `finishWebBuild(tmp, build/game)` injects the frame hook and swaps the folder in; the SDK's sibling `build/.tmp-<pid>.zip` and the project copy are deleted.
+  6. Writes `build/lane.json` `{game_version, sdk_version}` and appends the verdict to `PORTING_LOG.md`, with a warning when no `game/**/*.rpy` sets `config.save_directory` (saves would stay in memory) or when the game ships only compiled scripts (unknown). Returns `{lane_config, verdict, why}`, plus `warning` when there is one.
+- **Frames:** Ren'Py never calls `requestAnimationFrame`; the frame hook's WebGL draw-call fallback counts its frames (about 10 per second when idle).
+- **Saves:** Ren'Py's own IDBFS (`/home/web_user/.renpy/<config.save_directory>`), synced after each save; no adapter `saveNow`.
+- `shell()` returns `csp: {'script-src': ["'unsafe-eval'", "'unsafe-inline'"]}` (the page's inline script sets the `game.zip` URL, and Ren'Py calls `emscripten.run_script`), `needs_coi: false`, and `verify` with `inputs: ['ArrowDown', 'Enter', 'Click', 'Enter']`, `target_fps: 5`, `budget_ready_s: 30`.
+
 ## Stub lanes
 
 [stubs.mjs](../skills/port-any-game/scripts/lanes/stubs.mjs) lists every lane the design plans that is not built yet, as descriptors with `available: false`, `milestone` and a placeholder checklist. They still run `detect`, so the survey can say "best fit rt-scummvm, available in M2". Triggers come from survey engine ids (`engines`), a 32-bit PE main exe (`pe32`, always HARD), or `always`. A `hard` trigger yields HARD instead of GO.
 
 | Milestone | Lanes |
 |---|---|
-| M2 | rt-scummvm, rt-idtech, rebuild-renpy, remote-play |
+| M2 | rt-scummvm, rt-idtech, remote-play |
 | M3 | win-bottleship, win-boxedwine, win-dosboxx, win-v86 |
 | M4 | rt-mkxpz, rt-ags, rt-dirplayer, rt-butterscotch, rt-cheerpj, rebuild-godot, src-port, src-engine-export, rewrite-html5, decomp-rebuild |
 | M5 | recomp-x86 |

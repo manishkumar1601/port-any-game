@@ -72,6 +72,13 @@ test('RPG_RT.ldb -> rpgmaker-2k', async () => {
   assert.ok(ids(await engines({ 'RPG_RT.ldb': '' })).includes('rpgmaker-2k'));
 });
 
+test('renpy version from renpy/vc_version.py', async () => {
+  const e = await engines({ 'game/scripts.rpa': 'x', 'renpy/vc_version.py': "version_name = '9.9'\nofficial = True\nversion = '8.1.3.23091805'\n" });
+  assert.equal(e.find((x) => x.id === 'renpy')?.version, '8.1.3.23091805');
+  const bare = await engines({ 'game/script.rpyc': 'x', 'renpy/vc_version.py': 'vc_version = 3191\n' });
+  assert.equal(bare.find((x) => x.id === 'renpy')?.version, null, 'a bare build number is no version');
+});
+
 test('DOOM.WAD IWAD magic -> idtech-doom', async () => {
   assert.ok(ids(await engines({ 'DOOM.WAD': Buffer.from('IWAD\0\0\0\0') })).includes('idtech-doom'));
   assert.ok(!ids(await engines({ 'x.wad': Buffer.from('WAD3\0\0\0\0') })).includes('idtech-doom'));

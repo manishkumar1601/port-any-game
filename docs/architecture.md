@@ -56,7 +56,7 @@ The cache directory is `$PAG_CACHE` if set, else `~/.port-any-game`. It holds do
 
 A lane is a conversion method. Each module in `scripts/lanes/` is a descriptor: `id`, `rung`, `available`, `milestone`, `dataModes`, `acks`, `odds`, `detect(survey)`, and for available lanes `build(portDir)`, `shell(port)` (defaults for `shell.json`) and a runtime description. The registry [lanes/index.mjs](../skills/port-any-game/scripts/lanes/index.mjs) collects them and `rankLanes()` orders the ones that apply: GO before HARD, then lower rung, then `known-port` first.
 
-Six lanes are available: four from M1 and two from M2 (`rt-easyrpg`, `rebuild-love`):
+Seven lanes are available: four from M1 and three from M2 (`rt-easyrpg`, `rebuild-love`, `rebuild-renpy`):
 
 | Lane | Rung | Data mode | What `build` does |
 |---|---|---|---|
@@ -66,6 +66,7 @@ Six lanes are available: four from M1 and two from M2 (`rt-easyrpg`, `rebuild-lo
 | `dos-jsdos` | 1 | byo | Checks js-dos is installed; records the executable in `build/lane.json`. |
 | `rt-easyrpg` | 1 | byo | Checks EasyRPG Player is installed; records the game folder, encoding and RTP need in `build/lane.json`. |
 | `rebuild-love` | 3 | byo | Checks love.js is installed; finds the `.love` (or fused exe) and records it, its zip offset and LÖVE version in `build/lane.json`. |
+| `rebuild-renpy` | 3 | bundled | Checks the Ren'Py SDK is installed; rebuilds a copy of the game's `game/` with the SDK's headless `web_build` into `build/game/` (this runs the game's init Python once) and records the Ren'Py and SDK versions in `build/lane.json`. |
 
 All other lanes in [stubs.mjs](../skills/port-any-game/scripts/lanes/stubs.mjs) are descriptors with `available: false` and a target milestone; `pag new` refuses them. Per-lane detail is in [lanes.md](lanes.md).
 
@@ -166,7 +167,7 @@ Every packed build has a data mode, recorded in `shell.json` and `port.json`.
 | Mode | Game files | Typical lane | Sharing |
 |---|---|---|---|
 | `byo` (bring your own) | Not in `dist/`. On first start the user picks the game folder; the shell copies it into the browser's storage (OPFS). Nothing is uploaded. | `rt-ruffle`, `dos-jsdos`, `rt-easyrpg`, `rebuild-love` | A build with no game files; the user still owes runtime licence duties. |
-| `bundled` | Copied into `dist/game/`. | `web-extract` | Private copy only. |
+| `bundled` | Copied into `dist/game/`. | `web-extract`, `rebuild-renpy` | Private copy only. |
 | `bundled-public` | Copied into `dist/game/`, for a build meant to be shared. | Any lane | Allowed only when rights are established (`isPublicAllowed`). `pack` then persists the mode to `port.json`. |
 
 Pack accepts `byo` and `bundled` only if the lane lists them in `dataModes`; `bundled-public` is lane-independent and gated by policy. The legal reasoning, the acknowledgement IDs and the rule that only the user can state rights are in [safety-and-policy.md](safety-and-policy.md).

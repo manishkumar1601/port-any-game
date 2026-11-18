@@ -27,6 +27,7 @@ yourself. In this first version (M1) it can port:
 | DOS games | `dos-jsdos` | the game in DOSBox (js-dos); your files are imported into the browser, saves are kept |
 | RPG Maker 2000/2003 games | `rt-easyrpg` | the game in EasyRPG Player; your files are imported into the browser, saves are kept |
 | LÖVE (Love2D) games made for LÖVE 11 | `rebuild-love` | the game in love.js; your `.love` or game folder is imported into the browser, saves are kept |
+| Ren'Py 8 visual novels | `rebuild-renpy` | the game rebuilt by the Ren'Py SDK's own web build, served from this computer; saves are kept when the game names a save folder (most do) |
 | Games with an open-source re-creation (for example fheroes2, Augustus) | `known-port` | where to get the port and which of your files it needs |
 
 Everything else (Windows-only 3D games, consoles, online games) gets an honest "not yet" or "no" from the survey.

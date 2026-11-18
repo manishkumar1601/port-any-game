@@ -202,6 +202,10 @@
    "(^|/)game/[^/]*\\.rpyc?$",
    "(^|/)game/[^/]*\\.rpa$"
   ],
+  "version": {
+   "file": "(^|/)renpy/vc_version\\.py$",
+   "regex": "\\bversion\\s*=\\s*['\"]([0-9][0-9.]*)['\"]"
+  },
   "source": "local"
  },
  {

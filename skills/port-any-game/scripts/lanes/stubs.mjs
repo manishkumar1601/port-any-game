@@ -22,7 +22,6 @@ export default [
   L('rt-ags', 2, 'M4', ['byo'], RT, '60-80%', { engines: ['ags'] }),
   L('rt-dirplayer', 2, 'M4', ['byo'], RT, '30-60%', { engines: ['director'] }),
   L('rt-butterscotch', 2, 'M4', ['byo'], RT, '40-70%', { engines: ['gamemaker'], hard: true }),
-  L('rebuild-renpy', 3, 'M2', ['bundled'], ['ACK_PRIVATE_USE_ONLY'], '65-85%', { engines: ['renpy'] }),
   L('rt-cheerpj', 3, 'M4', ['byo'], ['ACK_PRIVATE_USE_ONLY', 'ACK_CHEERPJ_TERMS'], '40-85%', { engines: ['java'], hard: true }),
   L('rebuild-godot', 3, 'M4', ['bundled'], ['ACK_PRIVATE_USE_ONLY', 'ACK_GREY_ASSET_EXTRACT'], '50-80%', { engines: ['godot'], hard: true }),
   L('win-bottleship', 4, 'M3', ['byo'], ['ACK_RUNTIME_LICENSE'], 'unknown', { pe32: true }),

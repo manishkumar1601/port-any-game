@@ -102,12 +102,12 @@ covered by it; they still launch Chrome and need no runtime tools.
 
 [test/e2e/run.mjs](../test/e2e/run.mjs) `<lane|all> [--runner cdp|playwright] [--headed]` runs fixture game -> survey ->
 `newPort` -> build -> pack -> verify through the real pipeline. Lane ids are the keys of `CASES` (`web-extract`,
-`known-port`, `rt-ruffle`, `dos-jsdos`, `rt-easyrpg`, `rebuild-love`, `all`). Exit 0 pass or skipped, 1 failure, 2 usage. The lane tests
+`known-port`, `rt-ruffle`, `dos-jsdos`, `rt-easyrpg`, `rebuild-love`, `rebuild-renpy`, `all`). Exit 0 pass or skipped, 1 failure, 2 usage. The lane tests
 (`test/lanes/*.test.mjs`) import the same `CASES` and run them under `node:test`, so one case list serves both entry points.
 
 - **Per-run isolation.** `PAG_CACHE` and `PAG_HOME` point at a fresh temp dir; your real cache is never touched. Each case
   gets its own port dir.
-- **Shared tool cache.** Runtime tools (Ruffle, js-dos, EasyRPG, love.js, Playwright) install once into
+- **Shared tool cache.** Runtime tools (Ruffle, js-dos, EasyRPG, love.js, the Ren'Py SDK, Playwright) install once into
   `<os.tmpdir()>/pag-e2e-tools` and are reused by every e2e run on the machine. Pre-seed it by hand with
   `PAG_CACHE=<that dir> node skills/port-any-game/scripts/pag.mjs setup ruffle --yes` (also `jsdos`, `easyrpg`, `love`,
   `playwright`). `pag setup` honours `PAG_CACHE` and otherwise uses `~/.port-any-game`. Deleting the folder just forces

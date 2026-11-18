@@ -18,6 +18,11 @@ describes the code that enforces them. For where these layers sit in the whole s
 - **No game data in the repo.** Fixtures, the catalog and the repo itself carry no game files and no game-data URLs
   ([SCOPE.md](../SCOPE.md)). The catalog lists where to get open-source ports, not game data.
 - **No telemetry** and no GPL code vendored into the plugin ([SCOPE.md](../SCOPE.md)).
+- **One lane runs game code on the user's machine.** `rebuild-renpy`'s `pag build` runs the pinned Ren'Py SDK's
+  `web_build`, which starts the game headless once to read its settings, so the game's own init Python runs, as
+  launching the game would. The user owns and already runs this game, and a STOP protection still blocks every lane
+  before any build, so there is no extra acknowledgement. The build works on a copy of the game's `game/` folder under
+  `build/`; the install is never written. Every other lane runs game code only inside the browser.
 - Grey areas (decompiling, asset extraction, lightly encrypted archives, store licences) need the user's explicit
   acknowledgement and stay private-use only. The per-jurisdiction notes are in
   [legal.md](../skills/port-any-game/references/legal.md) (based on research note
@@ -35,7 +40,7 @@ lane's first one.
 | Mode | Contents of `dist/` | Sharing |
 |---|---|---|
 | `byo` | No game files. The page imports the user's own copy into the browser on first start | Allowed on a static host (no game data) |
-| `bundled` | A copy of the game files (for example an already-web game's own build) | **Private.** Stays on this computer; `pag package` prints a "Private copy" warning |
+| `bundled` | A copy of the game files (for example an already-web game's own build, or a Ren'Py game rebuilt for the web) | **Private.** Stays on this computer; `pag package` prints a "Private copy" warning |
 | `bundled-public` | Game files, built for sharing | Only when the rights gate passes |
 
 `pag pack [portDir] [--mode byo|bundled|bundled-public]` defaults to `port.data.mode`, else `byo`. `byo` and `bundled`
@@ -101,8 +106,8 @@ asked and the user said yes. The exact questions are in [legal.md](../skills/por
 
 | ID | Meaning | Required when |
 |---|---|---|
-| `ACK_PRIVATE_USE_ONLY` | The copy is for the user's private play, on their own devices, never posted | Every lane in M1 (`web-extract`, `known-port`, `rt-ruffle`, `dos-jsdos`), `rt-easyrpg` and `rebuild-love` |
-| `ACK_RUNTIME_LICENSE` | The build ships an open-source player (Ruffle, js-dos, EasyRPG, love.js) whose licence text must stay with it if the build is ever given away | `rt-ruffle`, `dos-jsdos`, `rt-easyrpg`, `rebuild-love` |
+| `ACK_PRIVATE_USE_ONLY` | The copy is for the user's private play, on their own devices, never posted | Every lane in M1 (`web-extract`, `known-port`, `rt-ruffle`, `dos-jsdos`), `rt-easyrpg`, `rebuild-love` and `rebuild-renpy` |
+| `ACK_RUNTIME_LICENSE` | The build ships an open-source player (Ruffle, js-dos, EasyRPG, love.js, Ren'Py's web runtime) whose licence text must stay with it if the build is ever given away | `rt-ruffle`, `dos-jsdos`, `rt-easyrpg`, `rebuild-love`, `rebuild-renpy` |
 | `ACK_UPX_PACKED` | The program is UPX-compressed; it is never unpacked automatically | The survey finds the `upx` protection (warn) |
 | `ACK_PROTECTION_WARN` | A warn-level protection (for example a Steam API library on its own) stays untouched and may limit the browser build | The survey finds any other warn-level protection |
 | `ACK_WARN_STORE_LICENSED` | A store copy is usually a licence, and its terms may limit modification | The survey shows a store (Steam, GOG, Epic) or the user says so |

@@ -30,6 +30,7 @@ const { makeAnimCom } = await import('../fixtures/make-dos-com.mjs');
 const { makeMZ } = await import('../fixtures/make-pe.mjs');
 const { makeRm2k } = await import('../fixtures/make-rm2k.mjs');
 const { makeLove } = await import('../fixtures/make-love.mjs');
+const { makeRenpy } = await import('../fixtures/make-renpy.mjs');
 const { ensureTool } = await import(`${SCRIPTS}/setup.mjs`);
 const { startServer } = await import(`${SCRIPTS}/serve.mjs`);
 const { openCdp } = await import(`${SCRIPTS}/verify/driver-cdp.mjs`);
@@ -373,6 +374,19 @@ async function loveSaveNow() {
   });
 }
 
+// ---- rebuild-renpy (bundled): the pinned SDK's web_build output in web-extract's iframe; only the adapter is in runtime/.
+async function renpyBundled() {
+  const r = await pipeline('rebuild-renpy', (d) => makeRenpy(d), { tools: ['renpy'] });
+  assert.equal(r.report.status, 'pass', failing(r.report));
+  assert.equal(r.built.verdict, 'GO');
+  console.log(`# rebuild-renpy: ${r.report.checks.filter((c) => ['ready', 'fps', 'blank', 'frozen', 'input'].includes(c.name)).map((c) => `${c.name}: ${c.detail}`).join(' | ')}`);
+  for (const f of ['index.html', 'renpy.wasm']) assert.ok(existsSync(path.join(r.distDir, 'game', f)), f);
+  const rt = distFiles(r.distDir).map((f) => path.relative(r.distDir, f).split(path.sep).join('/')).filter((f) => f.startsWith('runtime/'));
+  assert.equal(rt.length, 1, JSON.stringify(rt));
+  assert.match(rt[0], /^runtime\/rebuild-renpy-[0-9a-f]{8}\/adapter\.js$/);
+  assert.match(readFileSync(path.join(r.distDir, 'LICENSES', 'renpy.txt'), 'utf8'), /License: MIT AND LGPL-2\.1-or-later/);
+}
+
 const LANE_CASES = {
   'web-extract': [
     { name: 'web-extract NW.js fixture passes verify', run: () => passes('nwjs') },
@@ -397,6 +411,9 @@ const LANE_CASES = {
     { name: 'rebuild-love BYO fixture passes verify with zero game bytes in dist', run: () => loveByo('plain') },
     { name: 'rebuild-love fused exe passes verify', run: () => loveByo('fused') },
     { name: 'rebuild-love saveNow writes saves to IndexedDB and the game keeps running', run: loveSaveNow },
+  ],
+  'rebuild-renpy': [
+    { name: 'rebuild-renpy fixture builds with the pinned SDK and passes verify', run: renpyBundled },
   ],
 };
 

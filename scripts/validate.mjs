@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { LANES } from '../skills/port-any-game/scripts/lanes/index.mjs';
 
 // Lane id -> its family reference, references/lanes/<family>.md (spec §13). Unlisted ids use their own name.
-const FAMILY = { 'known-port': 'known-ports', 'dos-jsdos': 'dos', 'rt-easyrpg': 'easyrpg', 'rebuild-love': 'love' };
+const FAMILY = { 'known-port': 'known-ports', 'dos-jsdos': 'dos', 'rt-easyrpg': 'easyrpg', 'rebuild-love': 'love', 'rebuild-renpy': 'renpy' };
 const family = (id) => FAMILY[id] ?? (id.startsWith('rt-') ? 'runtimes' : id);
 const ALLOWED_KEYS = new Set(['name', 'description', 'license', 'compatibility', 'metadata', 'allowed-tools']);
 const readJson = (f) => JSON.parse(readFileSync(f, 'utf8'));
