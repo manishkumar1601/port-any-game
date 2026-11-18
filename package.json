@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "license": "MIT",
-  "engines": { "node": ">=20" },
+  "engines": { "node": ">=20.12" },
   "scripts": {
     "test": "node --test --test-concurrency=1 \"test/**/*.test.mjs\"",
     "gen": "node scripts/gen-wrappers.mjs",

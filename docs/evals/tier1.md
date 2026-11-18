@@ -8,7 +8,7 @@ CI covers the lane fixtures on 3 OSes; only a maintainer with real agent session
 
 Per agent and OS, on a machine (or clean VM) that has never had port-any-game installed:
 
-1. **Install** exactly as the README says for that agent. Install nothing else except Node 20+, git and Chrome or Edge.
+1. **Install** exactly as the README says for that agent. Install nothing else except Node 20.12+, git and Chrome or Edge.
 2. **Make the fixture folders** from a clone of this repo (`OUT` is any scratch dir you pick). Run from the repo root:
 
    ```

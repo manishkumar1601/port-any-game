@@ -2,7 +2,7 @@
 name: port-any-game
 description: "Play an old PC game you own in a web browser: port or convert it to web, HTML5 or WebAssembly. Use when the user wants to run a DOS, Flash (SWF), RPG Maker MV/MZ, NW.js, Electron, Construct or Twine game in a browser, play a PC game they own on another screen, check whether a game folder can be ported, or continue a port (a folder with port.json or PORTING_LOG.md). Surveys the game folder without running it, picks the simplest method that works (extract an already-web game, a known open-source port, Ruffle for Flash, js-dos for DOS), builds a private local copy, checks it in Chrome or Edge and hands over a play link or double-click launchers. Refuses DRM removal, cracks, piracy sources and public hosting of game files."
 license: MIT
-compatibility: "Requires Node.js 20+ (22 recommended), git; Chrome or Edge for verification (Playwright fallback)."
+compatibility: "Requires Node.js 20.12+ (22 recommended), git; Chrome or Edge for verification (Playwright fallback)."
 ---
 
 # Port Any Game
@@ -59,12 +59,12 @@ Also:
 ## Workflow
 
 ### 0. Check Node
-Run `node --version`. It must be 20 or newer (22 recommended). If node is missing or older, propose the install for
+Run `node --version`. It must be 20.12 or newer (22 recommended). If node is missing or older, propose the install for
 the user's system and wait for their OK:
 - Windows: `winget install OpenJS.NodeJS.LTS`
 - macOS: `brew install node` (or the LTS installer from nodejs.org)
 - Debian/Ubuntu: `curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs`.
-  Other Linux: the LTS download from nodejs.org, or the distribution's package if it is 20 or newer.
+  Other Linux: the LTS download from nodejs.org, or the distribution's package if it is 20.12 or newer.
 
 If `node` is still not found afterwards, ask the user to open a new terminal.
 

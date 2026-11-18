@@ -50,9 +50,11 @@ function hasGit() {
 }
 
 // Pure; shared with status.mjs. `recommend: false` drops the soft "22+ recommended" nudge.
+// M17: the floor is 20.12 (package.json engines): readdirSync({recursive, withFileTypes}) in the lanes needs it.
+export const nodeOk = (version) => { const [a, b] = String(version).split('.').map(Number); return a > 20 || (a === 20 && b >= 12); };
 export function nodeWarning(version, { recommend = true } = {}) {
   const major = Number(String(version).split('.')[0]);
-  if (major < 20) return `Node ${version} is too old; need >= 20`;
+  if (!nodeOk(version)) return `Node ${version} is too old; need >= 20.12`;
   if (recommend && major < 22) return `Node ${version} works; 22+ is recommended`;
   return null;
 }
@@ -79,7 +81,7 @@ export async function doctor() {
   if (diskFreeBytes && diskFreeBytes < 2 * 1024 ** 3) warnings.push('less than 2 GiB free in the cache dir');
   return {
     os: process.platform, arch: os.arch(),
-    node: { version: v, ok: major >= 20, recommended: major >= 22 },
+    node: { version: v, ok: nodeOk(v), recommended: major >= 22 },
     git, diskFreeBytes, browsers, playwrightCached, sandbox: detectSandbox(), cacheDir: cache, warnings,
   };
 }

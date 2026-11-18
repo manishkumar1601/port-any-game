@@ -43,10 +43,13 @@ test('silent outside a port', async () => {
   assert.deepEqual(await cap(d), { out: '', code: 0 });
 });
 
-test('includes node<20 warning', () => {
+// M17: readdirSync({recursive}) in the lanes needs Node 20.12 (earlier 20.x silently does not recurse with file types).
+test('includes node<20.12 warning', () => {
   const d = mk('old', P, '');
-  assert.deepEqual(status(d, { nodeVersion: '18.19.0' }).warnings, ['Node 18.19.0 is too old; need >= 20']);
-  assert.deepEqual(status(d, { nodeVersion: '20.1.0' }).warnings, []);
+  assert.deepEqual(status(d, { nodeVersion: '18.19.0' }).warnings, ['Node 18.19.0 is too old; need >= 20.12']);
+  assert.deepEqual(status(d, { nodeVersion: '20.11.1' }).warnings, ['Node 20.11.1 is too old; need >= 20.12']);
+  assert.deepEqual(status(d, { nodeVersion: '20.12.0' }).warnings, []);
+  assert.deepEqual(status(d, { nodeVersion: '22.0.0' }).warnings, []);
 });
 
 test('fail-open on corrupt port.json', async () => {
