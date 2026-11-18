@@ -4,9 +4,10 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Claude tool -> Copilot tool alias, and -> OpenCode v2 permission action (note 06 §4/§5.3). Bash is handled separately.
-const COPILOT = { Read: 'read', Glob: 'search', Grep: 'search', Bash: 'execute', Write: 'edit', Edit: 'edit', MultiEdit: 'edit', WebFetch: 'web', WebSearch: 'web' };
-const OPENCODE = { Read: 'read', Glob: 'glob', Grep: 'grep', Write: 'edit', Edit: 'edit', MultiEdit: 'edit', WebFetch: 'webfetch', WebSearch: 'websearch' };
+// Claude tool -> Copilot tool alias, and -> OpenCode v2 permission action (note 06 §4/§5.3). Bash and PowerShell (the
+// Windows shell tool) are handled separately.
+const COPILOT = { Read: 'read', Glob: 'search', Grep: 'search', Bash: 'execute', PowerShell: 'execute', Write: 'edit', Edit: 'edit', MultiEdit: 'edit', NotebookEdit: 'edit', WebFetch: 'web', WebSearch: 'web' };
+const OPENCODE = { Read: 'read', Glob: 'glob', Grep: 'grep', Write: 'edit', Edit: 'edit', MultiEdit: 'edit', NotebookEdit: 'edit', WebFetch: 'webfetch', WebSearch: 'websearch' };
 // Directories that hold only generated files: anything here the generator does not produce is stale.
 const GENERATED = [['com.github.copilot/agents', /\.agent\.md$/], ['opencode/agents', /\.md$/], ['opencode/commands', /\.md$/]];
 const PORT_GAME = `---
@@ -43,7 +44,7 @@ export function generate(rootDir) {
     const actions = [...new Set(tools.map((t) => OPENCODE[t]).filter(Boolean))];
     const perms = [['*', '*', 'deny'], ...actions.map((a) => [a, '*', 'allow'])];
     if (tools.includes('Read')) perms.push(['external_directory', '*', 'ask']); // the game and port folders sit outside the project
-    if (tools.includes('Bash')) {
+    if (tools.includes('Bash') || tools.includes('PowerShell')) {
       for (const c of [...new Set([...body.matchAll(/\bpag\.mjs ([a-z][\w-]*)/g)].map((m) => m[1]))].sort()) perms.push(['shell', `node *pag.mjs* ${c}*`, 'allow']);
     }
     out.set(`opencode/agents/${fm.name}.md`,

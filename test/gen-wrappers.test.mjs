@@ -65,6 +65,17 @@ test('opencode subagents may run their own pag commands, also with quoted paths 
   assert.equal(shellEffect(verifier, pag('survey', '"D:\\g"')), 'deny');
 });
 
+test('PowerShell and NotebookEdit map like Bash and Edit for the other hosts (I1)', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'pag-gen-'));
+  try {
+    mkdirSync(path.join(dir, 'agents'));
+    writeFileSync(path.join(dir, 'agents', 'x.md'), '---\nname: x\ndescription: "x"\ntools: Read, PowerShell, NotebookEdit\n---\nRun `node <skill-dir>/scripts/pag.mjs verify`.\n');
+    const out = generate(dir);
+    assert.match(out.get('com.github.copilot/agents/x.agent.md'), /^tools: \["read","execute","edit"\]$/m);
+    assert.deepEqual(perms(out.get('opencode/agents/x.md')), ['* * deny', 'read * allow', 'edit * allow', 'external_directory * ask', 'shell node *pag.mjs* verify* allow']);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('build --check passes on the committed files', () => {
   const r = spawnSync(process.execPath, [GEN, '--check'], { encoding: 'utf8' });
   assert.equal(r.status, 0, r.stderr);
