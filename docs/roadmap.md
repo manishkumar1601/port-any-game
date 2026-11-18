@@ -21,6 +21,17 @@ Milestone order is "cheap lanes and Tier 1 agents first, rewrite in M4, recompil
 - CI is green on `windows-latest`, `macos-latest` and `ubuntu-latest`, plus the Playwright-driver tier. The merge gate (R60) is met and `master` carries the result.
 - **Release gate still open:** the tier-1 manual agent eval, [evals/tier1.md](evals/tier1.md). It covers the fresh-machine procedure in Claude Code, Codex and OpenCode, every unverified host-hook behaviour (R5, R56, R57), real-Mac fps (R68), and the CI flake-watch notes. Nothing in M1 should be tagged for release before it is run.
 
+## M2 status: in progress
+
+M2 is split into four parts, in this order:
+
+| Part | Scope | Status |
+|---|---|---|
+| **M2a** | Lanes whose web runtime is published upstream: `rt-easyrpg`, `rebuild-love`, `rebuild-renpy` ([design](superpowers/specs/2026-11-18-m2a-runtime-lanes-design.md), [plan](superpowers/plans/2026-11-18-port-any-game-m2a-runtime-lanes.md)) | **In progress.** Plan Tasks 1–5 done, Task 6 built and fixed. Left: Task 6's scoped re-review, Task 7 (decisions R70+, this roadmap, docs) and the final whole-branch review. Resume notes: [memory/sessions/18-11-2026-m2a-runtime-lanes.md](../memory/sessions/18-11-2026-m2a-runtime-lanes.md) |
+| M2b | `remote-play` | Not started; needs a brainstorm, spec and plan |
+| M2c | Runtimes we build in our own CI: `rt-scummvm`, `rt-idtech` | Not started. Publishing GPL binaries as release assets needs the owner's OK |
+| M2d | Catalog expansion: PortMaster (MIT) and a libretro subset (CC BY-SA, separate file) | Not started |
+
 ## M2 backlog
 
 Items carried out of M1. Legend: **[M3-GATE]** must land before the M3 Windows lanes. **[1.0]** recommended before 1.0 or the first release tag. Source tags: `FR` final review triage, `RR` re-review parked item, `OS` out-of-scope minor (R59), `L` ledger deferred minor.

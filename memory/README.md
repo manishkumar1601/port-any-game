@@ -20,6 +20,7 @@ Each session has a one-line summary here and a full log in `sessions/`, named `d
 | [18-11-2026-m1-build-lanes-packaging-ci](sessions/18-11-2026-m1-build-lanes-packaging-ci.md) | M1 Tasks 16–23: four lanes, package, SKILL.md, agent wrappers/installer, 3-OS CI. |
 | [18-11-2026-m1-final-review-ci-green-master](sessions/18-11-2026-m1-final-review-ci-green-master.md) | Whole-branch review and fix wave (C1, I1–I8), CI repaired and green on all OSes, moved to `master`. |
 | [18-11-2026-docs-and-repo-memory](sessions/18-11-2026-docs-and-repo-memory.md) | Full system docs in `docs/`, this `memory/` folder, root `CLAUDE.md`/`AGENTS.md`. |
+| [18-11-2026-m2a-runtime-lanes](sessions/18-11-2026-m2a-runtime-lanes.md) | M2 split into M2a–d. M2a spikes, design and plan; Tasks 1–5 done; `rt-easyrpg` and `rebuild-love` shipped, `rebuild-renpy` built. **In progress: resume here.** |
 
 ## How to log a session
 

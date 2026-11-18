@@ -39,6 +39,8 @@ When code and a doc disagree, the code wins. Fix the doc.
 |---|---|
 | [superpowers/specs/2026-11-17-port-any-game-design.md](superpowers/specs/2026-11-17-port-any-game-design.md) | The approved design and plan (rev 2): intent, lane ladder, shell contract, legal rules, milestones. The source of intent; the code is the source of fact. |
 | [superpowers/plans/2026-11-17-port-any-game-m1-core.md](superpowers/plans/2026-11-17-port-any-game-m1-core.md) | The M1 implementation plan: core, Tier 1 packaging and the four M1 lanes, task by task. |
+| [superpowers/specs/2026-11-18-m2a-runtime-lanes-design.md](superpowers/specs/2026-11-18-m2a-runtime-lanes-design.md) | M2a design: the M2 split, and the `rt-easyrpg`, `rebuild-love` and `rebuild-renpy` lanes. |
+| [superpowers/plans/2026-11-18-port-any-game-m2a-runtime-lanes.md](superpowers/plans/2026-11-18-port-any-game-m2a-runtime-lanes.md) | M2a implementation plan, 7 tasks. |
 | [adr/0001-flat-plugin-layout.md](adr/0001-flat-plugin-layout.md) | Why the repo root is the plugin (flat layout) instead of `plugins/<name>/`. |
 | [evals/tier1.md](evals/tier1.md) | The manual Tier 1 agent eval: Claude Code, Codex and OpenCode take a fixture game to playable in 5 touchpoints or fewer, on each OS. The remaining M1 exit criterion. |
 
@@ -68,6 +70,9 @@ Short experiments run before building. Each labels findings as observed, documen
 | [c-opencode-guard.md](spikes/c-opencode-guard.md) | The dual v1/v2 OpenCode guard plugin. |
 | [d-cdp-verify.md](spikes/d-cdp-verify.md) | Driving Chrome and Edge over CDP with Node's global WebSocket and no npm dependencies (the verify driver). |
 | [e-jsdos-bundle.md](spikes/e-jsdos-bundle.md) | Embedding a js-dos 8.5.4 bundle for the DOS lane. |
+| [f-easyrpg-web.md](spikes/f-easyrpg-web.md) | EasyRPG Player 0.8.1.1 web build with BYO files under our CSP (`rt-easyrpg`). |
+| [g-lovejs.md](spikes/g-lovejs.md) | love.js 11.4.1 compat with a BYO `.love`, fused exes and saves (`rebuild-love`). |
+| [h-renpy-web.md](spikes/h-renpy-web.md) | Ren'Py 8.6.1 SDK headless `web_build` of a shipped game, in the web-extract iframe (`rebuild-renpy`). |
 
 ## Project memory
 

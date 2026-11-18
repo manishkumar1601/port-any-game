@@ -47,4 +47,9 @@
   - M1 lanes: `web-extract`, `known-port`, `rt-ruffle`, `dos-jsdos`.
   - CI is green on Windows, macOS and Ubuntu, plus the Playwright verify tier.
 - **Open release gate:** the tier-1 manual agent eval (`docs/evals/tier1.md`), a fresh-machine run in Claude Code, Codex and OpenCode.
-- **Next milestone:** M2 (more runtimes and Remote Play). It needs its own plan, written from the spec's §16 and the backlog in `docs/roadmap.md`.
+- **M2 is split into four parts,** done in this order: M2a (upstream-runtime lanes), M2b (`remote-play`), M2c (runtimes built in our own CI: `rt-scummvm`, `rt-idtech`), M2d (catalog expansion).
+- **M2a is in progress.**
+  - **Done:** `rt-easyrpg` (RPG Maker 2000/2003) and `rebuild-love` (LÖVE) are shipped and green on all three CI operating systems.
+  - **Built:** `rebuild-renpy` (Ren'Py 8.x), green on CI, with its first review fix round finishing.
+  - **Left:** plan Task 7 (decisions, roadmap, docs) and the final whole-branch review.
+  - Resume from [sessions/18-11-2026-m2a-runtime-lanes.md](sessions/18-11-2026-m2a-runtime-lanes.md), under "Open / next".
