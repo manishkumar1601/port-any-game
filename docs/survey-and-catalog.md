@@ -61,7 +61,7 @@ Each protection hit has `id`, `class` (`DRM`, `PROTECTOR`, `ANTI_CHEAT`, `LAUNCH
 
 `verdict.required_acknowledgements` is the union of:
 
-- the primary lane's `acks` ([lanes.md](lanes.md#m1-lanes)): `ACK_PRIVATE_USE_ONLY` for web-extract and known-port, plus `ACK_RUNTIME_LICENSE` for rt-ruffle, dos-jsdos and rt-easyrpg (see [M2 lanes](lanes.md#m2-lanes));
+- the primary lane's `acks` ([lanes.md](lanes.md#m1-lanes)): `ACK_PRIVATE_USE_ONLY` for web-extract and known-port, plus `ACK_RUNTIME_LICENSE` for rt-ruffle, dos-jsdos, rt-easyrpg and rebuild-love (see [M2 lanes](lanes.md#m2-lanes));
 - `ACK_UPX_PACKED` when the `upx` WARN rule hit;
 - `ACK_PROTECTION_WARN` for any other WARN hit.
 

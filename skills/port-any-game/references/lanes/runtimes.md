@@ -48,7 +48,6 @@ and stop honestly (or use another lane the survey listed):
 
 | Lane | Games | Arrives |
 |---|---|---|
-| `rt-easyrpg` | RPG Maker 2000/2003 | M2 |
 | `rt-scummvm` | classic point-and-click adventures | M2 |
 | `rt-idtech` | Doom, Quake, Half-Life engine games, Build engine games | M2 |
 | `rt-mkxpz` | RPG Maker XP, VX, VX Ace | M4 |

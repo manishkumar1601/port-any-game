@@ -107,6 +107,7 @@ Then load the reference for the chosen lane, and only that one:
 | `rt-ruffle` | [references/lanes/runtimes.md](references/lanes/runtimes.md) |
 | `dos-jsdos` | [references/lanes/dos.md](references/lanes/dos.md) |
 | `rt-easyrpg` | [references/lanes/easyrpg.md](references/lanes/easyrpg.md) |
+| `rebuild-love` | [references/lanes/love.md](references/lanes/love.md) |
 
 ### 4. Acknowledgements
 The survey lists IDs after "Acknowledgements:". Add the ground rules' Warn items that apply
@@ -129,8 +130,8 @@ that this needs a game that is free to share or the rights to it, and ask openly
      `node <skill-dir>/scripts/pag.mjs ack ACK_RIGHTS_HOLDER "<port>" --note-env PAG_NOTE`.
 
    pag echoes the stored note; check it matches the user's words exactly.
-3. Tools: Ruffle (`ruffle`), js-dos (`jsdos`) and EasyRPG (`easyrpg`) for their lanes, Playwright (`playwright`)
-   only when there is no Chrome or Edge. First run `node <skill-dir>/scripts/pag.mjs setup <name>` without `--yes`:
+3. Tools: Ruffle (`ruffle`), js-dos (`jsdos`), EasyRPG (`easyrpg`) and love.js (`love`) for their lanes, Playwright
+   (`playwright`) only when there is no Chrome or Edge. First run `node <skill-dir>/scripts/pag.mjs setup <name>` without `--yes`:
    it only prints what it would download and how big. Tell the user (for example "about 10 MB from npm") and, after
    they agree, run `node <skill-dir>/scripts/pag.mjs setup <name> --yes`. Run long downloads in the background if you
    can (Playwright is several hundred MB).

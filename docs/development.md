@@ -102,7 +102,7 @@ covered by it; they still launch Chrome and need no runtime tools.
 
 [test/e2e/run.mjs](../test/e2e/run.mjs) `<lane|all> [--runner cdp|playwright] [--headed]` runs fixture game -> survey ->
 `newPort` -> build -> pack -> verify through the real pipeline. Lane ids are the keys of `CASES` (`web-extract`,
-`known-port`, `rt-ruffle`, `dos-jsdos`, `rt-easyrpg`, `all`). Exit 0 pass or skipped, 1 failure, 2 usage. The lane tests
+`known-port`, `rt-ruffle`, `dos-jsdos`, `rt-easyrpg`, `rebuild-love`, `all`). Exit 0 pass or skipped, 1 failure, 2 usage. The lane tests
 (`test/lanes/*.test.mjs`) import the same `CASES` and run them under `node:test`, so one case list serves both entry points.
 
 - **Per-run isolation.** `PAG_CACHE` and `PAG_HOME` point at a fresh temp dir; your real cache is never touched. Each case

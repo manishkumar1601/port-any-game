@@ -65,6 +65,7 @@ Four lanes are available in M1:
 | `rt-ruffle` | 1 | byo | Checks Ruffle is installed; records the SWF in `build/lane.json`. |
 | `dos-jsdos` | 1 | byo | Checks js-dos is installed; records the executable in `build/lane.json`. |
 | `rt-easyrpg` | 1 | byo | Checks EasyRPG Player is installed; records the game folder, encoding and RTP need in `build/lane.json`. |
+| `rebuild-love` | 3 | byo | Checks love.js is installed; finds the `.love` (or fused exe) and records it, its zip offset and LÖVE version in `build/lane.json`. |
 
 All other lanes in [stubs.mjs](../skills/port-any-game/scripts/lanes/stubs.mjs) are descriptors with `available: false` and a target milestone; `pag new` refuses them. Per-lane detail is in [lanes.md](lanes.md).
 
@@ -164,7 +165,7 @@ Every packed build has a data mode, recorded in `shell.json` and `port.json`.
 
 | Mode | Game files | Typical lane | Sharing |
 |---|---|---|---|
-| `byo` (bring your own) | Not in `dist/`. On first start the user picks the game folder; the shell copies it into the browser's storage (OPFS). Nothing is uploaded. | `rt-ruffle`, `dos-jsdos`, `rt-easyrpg` | A build with no game files; the user still owes runtime licence duties. |
+| `byo` (bring your own) | Not in `dist/`. On first start the user picks the game folder; the shell copies it into the browser's storage (OPFS). Nothing is uploaded. | `rt-ruffle`, `dos-jsdos`, `rt-easyrpg`, `rebuild-love` | A build with no game files; the user still owes runtime licence duties. |
 | `bundled` | Copied into `dist/game/`. | `web-extract` | Private copy only. |
 | `bundled-public` | Copied into `dist/game/`, for a build meant to be shared. | Any lane | Allowed only when rights are established (`isPublicAllowed`). `pack` then persists the mode to `port.json`. |
 

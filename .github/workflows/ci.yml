@@ -52,6 +52,7 @@ jobs:
           node skills/port-any-game/scripts/pag.mjs setup ruffle --yes
           node skills/port-any-game/scripts/pag.mjs setup jsdos --yes
           node skills/port-any-game/scripts/pag.mjs setup easyrpg --yes
+          node skills/port-any-game/scripts/pag.mjs setup love --yes
       - name: Lane e2e
         env:
           PAG_E2E_KEEP: ${{ env.PAG_KEEP_DIR }}

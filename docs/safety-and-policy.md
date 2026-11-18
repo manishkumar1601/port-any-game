@@ -101,8 +101,8 @@ asked and the user said yes. The exact questions are in [legal.md](../skills/por
 
 | ID | Meaning | Required when |
 |---|---|---|
-| `ACK_PRIVATE_USE_ONLY` | The copy is for the user's private play, on their own devices, never posted | Every lane in M1 (`web-extract`, `known-port`, `rt-ruffle`, `dos-jsdos`) and `rt-easyrpg` |
-| `ACK_RUNTIME_LICENSE` | The build ships an open-source player (Ruffle, js-dos, EasyRPG) whose licence text must stay with it if the build is ever given away | `rt-ruffle`, `dos-jsdos`, `rt-easyrpg` |
+| `ACK_PRIVATE_USE_ONLY` | The copy is for the user's private play, on their own devices, never posted | Every lane in M1 (`web-extract`, `known-port`, `rt-ruffle`, `dos-jsdos`), `rt-easyrpg` and `rebuild-love` |
+| `ACK_RUNTIME_LICENSE` | The build ships an open-source player (Ruffle, js-dos, EasyRPG, love.js) whose licence text must stay with it if the build is ever given away | `rt-ruffle`, `dos-jsdos`, `rt-easyrpg`, `rebuild-love` |
 | `ACK_UPX_PACKED` | The program is UPX-compressed; it is never unpacked automatically | The survey finds the `upx` protection (warn) |
 | `ACK_PROTECTION_WARN` | A warn-level protection (for example a Steam API library on its own) stays untouched and may limit the browser build | The survey finds any other warn-level protection |
 | `ACK_WARN_STORE_LICENSED` | A store copy is usually a licence, and its terms may limit modification | The survey shows a store (Steam, GOG, Epic) or the user says so |

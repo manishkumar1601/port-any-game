@@ -121,6 +121,8 @@ frames counted from rendered movie time, unwraps Flash projectors),
 browser, own key routing),
 [rt-easyrpg](../skills/port-any-game/assets/lanes/rt-easyrpg/adapter.js) (EasyRPG Player web build, its file requests
 answered from OPFS by an XHR shim),
+[rebuild-love](../skills/port-any-game/assets/lanes/rebuild-love/adapter.js) (love.js compat build, the `.love` from OPFS
+written into its file system),
 [web-extract](../skills/port-any-game/assets/lanes/web-extract/adapter.js) (same-origin iframe on `game/index.html`,
 frames and errors from an injected `__pag_hook.js`). See [lanes.md](lanes.md).
 
@@ -212,7 +214,7 @@ Details worth knowing:
 - **Hashed runtime folder.** The folder name is `<lane>-<first 8 hex of sha256>` over the sorted relative paths and
   bytes of the adapter plus the pinned runtime files. Because the name changes with the content,
   `/runtime/*` can be served `immutable` for a year, and `shell.json` (never cached) points at the current folder.
-  The runtime tool must already be installed (`pag setup ruffle|jsdos|easyrpg --yes`).
+  The runtime tool must already be installed (`pag setup ruffle|jsdos|easyrpg|love --yes`).
 - **Atomic swap.** The build is written under `<port>/work/pack-tmp-<pid>` and renamed over `dist/`; on failure the
   old `dist/` is restored, and a BYO pack never keeps game bytes from an earlier bundled one.
 - **Licences.** `LICENSES/` gets the shell's MIT text and one notice per runtime tool (GPL tools also get the
@@ -290,6 +292,7 @@ tools.
 | web-extract | The game's own `localStorage`/IndexedDB in the same origin (the iframe is same-origin). |
 | DOS (dos-jsdos) | DOSBox writes into the worker's in-memory disk. The adapter calls `ci.persist()`, which returns the files changed since start as a zip, and stores it as `dosbox-changes.zip` under OPFS `data.saves` (`/saves/<id>`). On next start it is passed to js-dos as a second bundle, so changed files overwrite the originals. Saved every 30 s, on pause (tab hidden), on `pagehide`, and on demand through `saveNow()`. A crash within 30 s of a save can lose it. |
 | RPG Maker 2000/2003 (rt-easyrpg) | EasyRPG Player keeps saves in IndexedDB (IDBFS at `/easyrpg/<game>/Save`, one database per `lane_config.game`) and syncs after each save; `saveNow()` forces a sync. |
+| LÖVE (rebuild-love) | love.js keeps `love.filesystem` saves in IDBFS (IndexedDB database `/home/web_user/love`, one folder per `t.identity`) and writes them back only from its own `beforeunload` listener. The adapter calls that listener directly every 30 s, on pause (tab hidden), on `pagehide` and through `saveNow()`; a synthetic `beforeunload` event would make SDL quit the game. A browser killed within 30 s of a save can lose it. |
 
 verify's `save` check proves the storage round trip (self-test plus a `localStorage` token across a reload) and, for
 lanes with `saveNow`, that it ran. Lanes without one report "lane save path not exercised".

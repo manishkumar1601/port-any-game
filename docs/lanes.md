@@ -2,7 +2,7 @@
 
 A **lane** is one way of getting a game running in the browser. `pag survey` ranks the lanes that fit a game, `pag new` picks one, `pag build` runs its build step, and `pack` bundles its adapter and runtime into the shell. This page describes the lane module contract, the ranking, the four lanes built in M1, the M2 lanes, the planned stubs, and how to add a lane.
 
-Related: [survey-and-catalog.md](survey-and-catalog.md) (how detection feeds the lanes), [runtime.md](runtime.md) (shell, `shell.json`, pack), [safety-and-policy.md](safety-and-policy.md) (acks and data modes), [verify.md](verify.md). The agent-facing, per-lane runbooks are in [references/lanes/](../skills/port-any-game/references/lanes/): [web-extract.md](../skills/port-any-game/references/lanes/web-extract.md), [known-ports.md](../skills/port-any-game/references/lanes/known-ports.md), [runtimes.md](../skills/port-any-game/references/lanes/runtimes.md) (Ruffle), [dos.md](../skills/port-any-game/references/lanes/dos.md), [easyrpg.md](../skills/port-any-game/references/lanes/easyrpg.md). Do not copy those into this repo doc; they are what the agent reads at run time.
+Related: [survey-and-catalog.md](survey-and-catalog.md) (how detection feeds the lanes), [runtime.md](runtime.md) (shell, `shell.json`, pack), [safety-and-policy.md](safety-and-policy.md) (acks and data modes), [verify.md](verify.md). The agent-facing, per-lane runbooks are in [references/lanes/](../skills/port-any-game/references/lanes/): [web-extract.md](../skills/port-any-game/references/lanes/web-extract.md), [known-ports.md](../skills/port-any-game/references/lanes/known-ports.md), [runtimes.md](../skills/port-any-game/references/lanes/runtimes.md) (Ruffle), [dos.md](../skills/port-any-game/references/lanes/dos.md), [easyrpg.md](../skills/port-any-game/references/lanes/easyrpg.md), [love.md](../skills/port-any-game/references/lanes/love.md). Do not copy those into this repo doc; they are what the agent reads at run time.
 
 ## Where lanes live
 
@@ -10,10 +10,10 @@ Related: [survey-and-catalog.md](survey-and-catalog.md) (how detection feeds the
 |---|---|
 | [scripts/lanes/index.mjs](../skills/port-any-game/scripts/lanes/index.mjs) | Registry (`LANES`, keyed by `id`) and `rankLanes(survey)` |
 | [scripts/lanes/web-extract.mjs](../skills/port-any-game/scripts/lanes/web-extract.mjs), [known-port.mjs](../skills/port-any-game/scripts/lanes/known-port.mjs), [rt-ruffle.mjs](../skills/port-any-game/scripts/lanes/rt-ruffle.mjs), [dos-jsdos.mjs](../skills/port-any-game/scripts/lanes/dos-jsdos.mjs) | The four M1 lanes |
-| [scripts/lanes/rt-easyrpg.mjs](../skills/port-any-game/scripts/lanes/rt-easyrpg.mjs) | The M2 lanes |
+| [scripts/lanes/rt-easyrpg.mjs](../skills/port-any-game/scripts/lanes/rt-easyrpg.mjs), [rebuild-love.mjs](../skills/port-any-game/scripts/lanes/rebuild-love.mjs) | The M2 lanes |
 | [scripts/lanes/stubs.mjs](../skills/port-any-game/scripts/lanes/stubs.mjs) | Descriptor-only lanes for later milestones |
 | `assets/lanes/<id>/adapter.js` | The browser adapter, copied into `dist/runtime/` ([assets/lanes/](../skills/port-any-game/assets/lanes/)) |
-| [scripts/toolchain.lock.json](../skills/port-any-game/scripts/toolchain.lock.json) | Pinned third-party runtimes (Ruffle, js-dos, EasyRPG) that lanes name in `runtime.tool` |
+| [scripts/toolchain.lock.json](../skills/port-any-game/scripts/toolchain.lock.json) | Pinned third-party runtimes (Ruffle, js-dos, EasyRPG, love.js) that lanes name in `runtime.tool` |
 
 ## The lane module contract
 
@@ -143,6 +143,7 @@ DOS programs run on js-dos 8.5.4 (DOSBox compiled to wasm, **GPL-2.0**), bring-y
 | Lane | Rung | Data mode | Acks | Detects |
 |---|---|---|---|---|
 | `rt-easyrpg` | 1 | `byo` | `ACK_PRIVATE_USE_ONLY`, `ACK_RUNTIME_LICENSE` | engine `rpgmaker-2k` -> GO |
+| `rebuild-love` | 3 | `byo` | `ACK_PRIVATE_USE_ONLY`, `ACK_RUNTIME_LICENSE` | engine `love` -> GO (verdict from `build`) |
 
 ### rt-easyrpg
 
@@ -160,13 +161,26 @@ RPG Maker 2000/2003 games run on EasyRPG Player 0.8.1.1 (the upstream web build,
 - **Saves:** IDBFS at `/easyrpg/<game>/Save`, synced by the player after each save. `saveNow()` forces `FS.syncfs(false)` and throws when the player has no `FS`, so verify's "lane saveNow ran" means a real sync.
 - `shell()` returns `lane_config`, `csp: {'script-src': ["'unsafe-eval'"]}` (embind builds its glue with `new Function`), `needs_coi: false`, and `verify` with `inputs: ['Enter']`, `target_fps: 30`.
 
+### rebuild-love
+
+LÖVE games run on love.js 11.4.1 (LÖVE 11.4 compiled to wasm, **MIT**, tool `love.js`, from npm), bring-your-own data. Agent runbook: [love.md](../skills/port-any-game/references/lanes/love.md).
+
+- **Runtime:** `runtime.files` is `src/compat/love.js` and `src/compat/love.wasm`. Only the compat build: the threaded one needs `SharedArrayBuffer`, so COOP/COEP. No love.js CLI, no `game.data`. `pack` writes the tool's `LICENSE` into `LICENSES/love.js.txt`.
+- **Detect:** engine `love` (`love.dll` or a `*.love` file) gives GO; the real verdict comes from `build`.
+- **Build:** requires the tool installed (`pag setup love --yes`). It finds the game file, in order: the shallowest `*.love` outside a `.app`; else a `survey.json` exe whose overlay is `zip` (the main exe first); else `*.app/Contents/Resources/*.love`. `loveContainer(buf)` returns the zip start: `min(entry.offset)` from `listZip`, when the bytes from there re-parse as the same zip (a `copy /b` fused exe), else 0, the whole file (Info-ZIP `-A` absolute offsets; love.js's PhysFS finds the zip from the end). It throws when there is no zip or no root `main.lua`. `loveVerdict({conf, lua, names})` reads `t.version` from `conf.lua` (Lua comments stripped): 11.0–11.4 GO, 11.5 GO (the runtime is 11.4), `0.*`/`10.*` HARD, `12.*` NO, unknown or missing HARD; any `.dll`/`.so`/`.dylib` entry, `require("ffi")` or `package.loadlib` is NO. It writes `build/lane.json` `{file, offset, version}` and appends the verdict to `PORTING_LOG.md`; no game bytes go to `build/`.
+- **Adapter:** reads `lane_config.file` from `ctx.files`, slices it at `offset`, and writes it into love.js's MEMFS as `/game.love` in `preRun` (`Module.FS_createDataFile`), with `arguments: ['./game.love']`, `INITIAL_MEMORY` 16 MiB and `locateFile` into the runtime folder. The canvas has `id="canvas"` (SDL registers its mouse handlers on `#canvas`) and its CSS box is the picture itself (centred, shrunk to fit, never enlarged), because SDL scales mouse positions by the CSS box. `window.alert` is replaced for the page's lifetime (LÖVE's version-mismatch message box is a blocking `alert`) and forwards to `console.warn`. `window.eval` is replaced too: love.js reports some start-up failures with `emscripten_run_script("alert(...)")`, which the CSP blocks; the adapter reports love's last output line instead.
+- **Frames:** `postMainLoop` reports frames and `preMainLoop` returns false while paused.
+- **Errors:** a `print`/`printErr` line matching `/^Error|stack traceback/` (love's error screen still paints frames) calls `ctx.reportError` once.
+- **Saves:** LÖVE's IDBFS at `/home/web_user/love/<identity>`. love.js writes it to IndexedDB only from a `beforeunload` listener it adds while `Love()` runs, and does not export `FS`. A synthetic `beforeunload` cannot be used: SDL answers it with `SDL_APP_TERMINATING` and LÖVE quits. So the adapter keeps that listener (it wraps `window.addEventListener` only during the synchronous `Love()` call) and `saveNow()` calls it directly; it throws before love.js has started. It runs every 30 s, on `pause()` and on `pagehide`.
+- `shell()` returns `lane_config`, `needs_coi: false` (no CSP relaxation), and `verify` with `inputs: ['Click', 'Enter', 'Space']`, `target_fps: 30`.
+
 ## Stub lanes
 
 [stubs.mjs](../skills/port-any-game/scripts/lanes/stubs.mjs) lists every lane the design plans that is not built yet, as descriptors with `available: false`, `milestone` and a placeholder checklist. They still run `detect`, so the survey can say "best fit rt-scummvm, available in M2". Triggers come from survey engine ids (`engines`), a 32-bit PE main exe (`pe32`, always HARD), or `always`. A `hard` trigger yields HARD instead of GO.
 
 | Milestone | Lanes |
 |---|---|
-| M2 | rt-scummvm, rt-idtech, rebuild-renpy, rebuild-love, remote-play |
+| M2 | rt-scummvm, rt-idtech, rebuild-renpy, remote-play |
 | M3 | win-bottleship, win-boxedwine, win-dosboxx, win-v86 |
 | M4 | rt-mkxpz, rt-ags, rt-dirplayer, rt-butterscotch, rt-cheerpj, rebuild-godot, src-port, src-engine-export, rewrite-html5, decomp-rebuild |
 | M5 | recomp-x86 |

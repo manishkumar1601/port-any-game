@@ -29,6 +29,7 @@ const { makeAnimSwf } = await import('../fixtures/make-swf.mjs');
 const { makeAnimCom } = await import('../fixtures/make-dos-com.mjs');
 const { makeMZ } = await import('../fixtures/make-pe.mjs');
 const { makeRm2k } = await import('../fixtures/make-rm2k.mjs');
+const { makeLove } = await import('../fixtures/make-love.mjs');
 const { ensureTool } = await import(`${SCRIPTS}/setup.mjs`);
 const { startServer } = await import(`${SCRIPTS}/serve.mjs`);
 const { openCdp } = await import(`${SCRIPTS}/verify/driver-cdp.mjs`);
@@ -319,6 +320,59 @@ async function easyrpgStatus() {
   });
 }
 
+// ---- rebuild-love (BYO): the adapter writes the imported .love (or the zip in a fused exe) into love.js's file system.
+const loveRun = (variant) => (runs[`love-${variant}`] ??= pipeline('rebuild-love', (d) => makeLove(d, { variant }), { mode: 'byo', tools: ['love'] }));
+
+async function loveByo(variant) {
+  const r = await loveRun(variant);
+  assert.equal(r.report.status, 'pass', failing(r.report));
+  assert.equal(r.built.verdict, 'GO');
+  assert.match(r.report.checks.find((c) => c.name === 'save').detail, /lane saveNow ran/); // R64
+  console.log(`# rebuild-love ${variant}: ${r.report.checks.filter((c) => ['ready', 'fps', 'blank', 'frozen', 'input'].includes(c.name)).map((c) => `${c.name}: ${c.detail}`).join(' | ')}`);
+  const files = distFiles(r.distDir);
+  const rt = files.map((f) => path.relative(r.distDir, f).split(path.sep).join('/')).filter((f) => f.startsWith('runtime/')).sort();
+  assert.match(rt[0] ?? '', /^runtime\/rebuild-love-[0-9a-f]{8}\//);
+  assert.deepEqual(rt.map((f) => f.replace(/^runtime\/[^/]+\//, '')), ['adapter.js', 'src/compat/love.js', 'src/compat/love.wasm']);
+  const game = distFiles(path.join(r.portDir, 'game')).map((f) => readFileSync(f)).filter((b) => b.length > 20);
+  for (const f of files) {
+    const b = readFileSync(f);
+    assert.equal(game.some((g) => b.includes(g)), false, `game bytes in dist: ${f}`);
+  }
+  assert.equal(existsSync(path.join(r.distDir, 'game')), false, 'a byo dist has no game/ folder');
+  assert.match(readFileSync(path.join(r.distDir, 'LICENSES', 'love.js.txt'), 'utf8'), /License: MIT/);
+  // the fixture's run counter in love.filesystem survived verify's reload
+  assert.match(readFileSync(path.join(r.report.reportDir, 'console.log'), 'utf8'), /\[love\] RUNS 2/);
+}
+
+// saveNow writes the IDBFS saves to IndexedDB, and the game keeps running (a beforeunload event reaching SDL would
+// become SDL_APP_TERMINATING, and LÖVE quits).
+async function loveSaveNow() {
+  await inBrowser(await loveRun('plain'), async ({ ev }) => {
+    const keys = () => ev(() => new Promise((res) => {
+      const q = indexedDB.open('/home/web_user/love');
+      q.onerror = () => res([]);
+      q.onsuccess = () => {
+        try {
+          const g = q.result.transaction('FILE_DATA').objectStore('FILE_DATA').getAllKeys();
+          g.onsuccess = () => { res(g.result.map(String)); q.result.close(); };
+          g.onerror = () => res([]);
+        } catch { res([]); } // no store yet
+      };
+    }));
+    const runs = '/home/web_user/love/pagfixture/runs.txt';
+    assert.ok(!(await keys()).includes(runs), 'not synced before saveNow');
+    await ev(() => window.__shell.lane.saveNow());
+    const a = await ev(() => window.__shell.stats.gameFrames);
+    let got = [];
+    for (const end = Date.now() + 5000; Date.now() < end && !got.includes(runs); await sleep(200)) got = await keys();
+    assert.ok(got.includes(runs), `IndexedDB keys after saveNow: ${JSON.stringify(got)}`);
+    await sleep(1000);
+    const [state, b] = await ev(() => [window.__shell.state, window.__shell.stats.gameFrames]);
+    assert.equal(state, 'running');
+    assert.ok(b > a + 10, `frames after saveNow: ${a} -> ${b}`);
+  });
+}
+
 const LANE_CASES = {
   'web-extract': [
     { name: 'web-extract NW.js fixture passes verify', run: () => passes('nwjs') },
@@ -338,6 +392,11 @@ const LANE_CASES = {
   'rt-easyrpg': [
     { name: 'rt-easyrpg BYO fixture passes verify with zero game bytes in dist', run: easyrpgByo },
     { name: 'rt-easyrpg keeps the shell status line', run: easyrpgStatus },
+  ],
+  'rebuild-love': [
+    { name: 'rebuild-love BYO fixture passes verify with zero game bytes in dist', run: () => loveByo('plain') },
+    { name: 'rebuild-love fused exe passes verify', run: () => loveByo('fused') },
+    { name: 'rebuild-love saveNow writes saves to IndexedDB and the game keeps running', run: loveSaveNow },
   ],
 };
 

@@ -82,7 +82,7 @@ test('primary_lane skips unavailable lanes', () => {
 });
 
 test('every M1 and M2 lane descriptor has checklist items and acks', () => {
-  for (const [id, milestone] of [['web-extract', 'M1'], ['known-port', 'M1'], ['rt-ruffle', 'M1'], ['dos-jsdos', 'M1'], ['rt-easyrpg', 'M2']]) {
+  for (const [id, milestone] of [['web-extract', 'M1'], ['known-port', 'M1'], ['rt-ruffle', 'M1'], ['dos-jsdos', 'M1'], ['rt-easyrpg', 'M2'], ['rebuild-love', 'M2']]) {
     const l = LANES[id];
     assert.equal(l.available, true);
     assert.equal(l.milestone, milestone);

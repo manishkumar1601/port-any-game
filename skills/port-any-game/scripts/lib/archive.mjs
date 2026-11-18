@@ -56,6 +56,15 @@ export function listZip(buf) {
   return out;
 }
 
+// The bytes of one listZip entry (store or deflate).
+export function zipEntryData(buf, e) {
+  const start = e.offset + 30 + buf.readUInt16LE(e.offset + 26) + buf.readUInt16LE(e.offset + 28);
+  const raw = buf.subarray(start, start + e.csize);
+  if (e.method === 0) return raw;
+  if (e.method === 8) return inflateRawSync(raw, { maxOutputLength: Math.max(e.size, 1) }); // zip bomb guard: never more than the declared size
+  throw new Error(`unsupported zip method ${e.method} for ${e.name}`);
+}
+
 // Returns the relative forward-slash names of the files written.
 export async function extractZip(zipPath, destDir, { strip = 0 } = {}) {
   const buf = readFileSync(zipPath);
@@ -66,13 +75,7 @@ export async function extractZip(zipPath, destDir, { strip = 0 } = {}) {
     if (!e.rel || e.rel === '/') continue;
     const target = safeJoin(destDir, e.rel);
     if (e.name.endsWith('/')) { mkdirSync(target, { recursive: true }); continue; }
-    const start = e.offset + 30 + buf.readUInt16LE(e.offset + 26) + buf.readUInt16LE(e.offset + 28);
-    const raw = buf.subarray(start, start + e.csize);
-    let data;
-    if (e.method === 0) data = raw;
-    else if (e.method === 8) data = inflateRawSync(raw, { maxOutputLength: Math.max(e.size, 1) }); // zip bomb guard: never more than the declared size
-    else throw new Error(`unsupported zip method ${e.method} for ${e.name}`);
-    writeOut(target, data, (e.attr >>> 16) & 0o111 ? (e.attr >>> 16) : 0);
+    writeOut(target, zipEntryData(buf, e), (e.attr >>> 16) & 0o111 ? (e.attr >>> 16) : 0);
     written.push(e.rel);
   }
   return written;
