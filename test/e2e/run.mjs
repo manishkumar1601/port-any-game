@@ -2,7 +2,7 @@
 // `node test/e2e/run.mjs <lane> [--runner cdp|playwright] [--headed]` runs that lane's cases (exit 0 pass or skipped, 1
 // failure, 2 usage); the lane test files import CASES and run them under node:test. Tasks 17-18 add their lanes to CASES.
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, realpathSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -309,7 +309,7 @@ async function main(argv) {
   return failed ? 1 : 0;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   let code = 1;
   try { code = await main(process.argv.slice(2)); } finally { cleanup(); }
   process.exit(code);

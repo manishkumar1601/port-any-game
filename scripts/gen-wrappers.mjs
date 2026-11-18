@@ -1,6 +1,6 @@
 // Generates per-agent wrappers from the canonical subagents in agents/*.md (Claude format: name, description, tools).
 // `node scripts/gen-wrappers.mjs` writes them (the output is committed); `--check` exits 1 on any drift (validate runs it).
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -75,7 +75,7 @@ export function write(rootDir) {
   return [...files.keys()];
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   if (process.argv.includes('--check')) {
     const d = drift(root);

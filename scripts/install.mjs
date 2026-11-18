@@ -2,7 +2,7 @@
 // a previous install of them) and prints each step; it never writes or edits an agent's config file (it prints the
 // lines to merge) and never starts an agent.
 // usage: node scripts/install.mjs --host=<opencode|skills> (--global | --project <dir>) [--dry-run]
-import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -74,4 +74,4 @@ export function run(argv, io = { out: (t) => process.stdout.write(t), err: (t) =
   return 0;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = run(process.argv.slice(2));
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = run(process.argv.slice(2));

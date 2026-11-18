@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { symlinkSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -81,13 +81,17 @@ test('build --check passes on the committed files', () => {
   assert.equal(r.status, 0, r.stderr);
 });
 
+// The copy is run through a link (macOS /var -> /private/var, a linked home): node resolves the entry module's real path,
+// and the script used to compare that with the unresolved argv[1] and so did nothing, exit 0.
 test('build --check detects drift', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'pag-gen-'));
+  const via = `${dir}-link`;
   try {
+    symlinkSync(dir, via, process.platform === 'win32' ? 'junction' : 'dir');
     for (const p of ['agents', 'com.github.copilot', 'opencode']) cpSync(path.join(ROOT, p), path.join(dir, p), { recursive: true });
     mkdirSync(path.join(dir, 'scripts'));
     cpSync(GEN, path.join(dir, 'scripts', 'gen-wrappers.mjs'));
-    const gen = (...a) => spawnSync(process.execPath, [path.join(dir, 'scripts', 'gen-wrappers.mjs'), ...a], { encoding: 'utf8' });
+    const gen = (...a) => spawnSync(process.execPath, [path.join(via, 'scripts', 'gen-wrappers.mjs'), ...a], { encoding: 'utf8' });
     assert.equal(gen('--check').status, 0);
 
     const f = path.join(dir, 'opencode', 'agents', 'port-verifier.md');
@@ -101,6 +105,7 @@ test('build --check detects drift', () => {
     assert.equal(gen().status, 0);
     assert.equal(gen('--check').status, 0);
   } finally {
+    rmSync(via, { force: true });
     rmSync(dir, { recursive: true, force: true });
   }
 });
