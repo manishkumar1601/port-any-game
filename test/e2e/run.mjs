@@ -208,11 +208,14 @@ const LANE_CASES = {
 // 'all' = every lane's cases, in lane order.
 export const CASES = { ...LANE_CASES, all: Object.values(LANE_CASES).flat() };
 
+// Exit code when the browser e2e cannot run: a skip is 0, unless CI demands a browser (PAG_E2E_REQUIRE_BROWSER=1) and one is missing.
+export const skipExit = (why, env = process.env) => (why && env.PAG_E2E_REQUIRE_BROWSER === '1' && !/PAG_E2E=0/.test(why) ? 1 : 0);
+
 async function main(argv) {
   const cases = CASES[argv[0]];
   if (!cases) { console.error(`usage: node test/e2e/run.mjs <${Object.keys(CASES).join('|')}>`); return 2; }
   const why = skipReason();
-  if (why) { console.log(`SKIP ${argv[0]}: ${why}`); return 0; }
+  if (why) { const code = skipExit(why); console.log(`${code ? 'FAIL' : 'SKIP'} ${argv[0]}: ${why}${code ? ' (PAG_E2E_REQUIRE_BROWSER=1)' : ''}`); return code; }
   let failed = 0;
   for (const c of cases) {
     try { await c.run(); console.log(`ok   ${c.name}`); } catch (e) {

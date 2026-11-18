@@ -27,8 +27,10 @@ jobs:
       # The e2e tool cache is <os.tmpdir()>/pag-e2e-tools (test/e2e/run.mjs); os.tmpdir() differs per OS, so ask node.
       - name: Locate the e2e tool cache and keep dir
         run: |
-          node -e "const p=require('path'),d=require('os').tmpdir(),f=(n)=>p.join(d,n).split(p.sep).join('/');console.log('PAG_E2E_TOOLS='+f('pag-e2e-tools'));console.log('PAG_E2E_KEEP='+f('pag-e2e-keep'))" >> "$GITHUB_ENV"
-      - name: Unit tests (browser e2e runs once, below)
+          node -e "const p=require('path'),d=require('os').tmpdir(),f=(n)=>p.join(d,n).split(p.sep).join('/');console.log('PAG_E2E_TOOLS='+f('pag-e2e-tools'));console.log('PAG_KEEP_DIR='+f('pag-e2e-keep'))" >> "$GITHUB_ENV"
+      # PAG_E2E=0 skips the lane e2e cases (they run once, in the e2e step below). The verify/browser unit tests still launch
+      # Chrome here: they need no runtime tools, so they stay in npm test.
+      - name: Unit tests (lane e2e is skipped here; verify tests still use the browser)
         env:
           PAG_E2E: '0'
         run: npm test
@@ -36,7 +38,9 @@ jobs:
         run: node scripts/validate.mjs
       - name: Wrappers are up to date
         run: node scripts/gen-wrappers.mjs --check
-      - uses: actions/cache@v4
+      - name: Restore e2e tool cache
+        id: tools
+        uses: actions/cache/restore@v4
         with:
           path: ${{ env.PAG_E2E_TOOLS }}
           key: e2e-tools-${{ runner.os }}-${{ hashFiles('skills/port-any-game/scripts/toolchain.lock.json') }}
@@ -47,11 +51,21 @@ jobs:
           node skills/port-any-game/scripts/pag.mjs setup ruffle --yes
           node skills/port-any-game/scripts/pag.mjs setup jsdos --yes
       - name: Lane e2e
+        env:
+          PAG_E2E_KEEP: ${{ env.PAG_KEEP_DIR }}
+          PAG_E2E_REQUIRE_BROWSER: '1' # a runner without Chrome must fail, not skip
         run: npm run e2e
+      # Saved even when e2e fails, so a red first run still keeps the downloads.
+      - name: Save e2e tool cache
+        if: always() && steps.tools.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.PAG_E2E_TOOLS }}
+          key: e2e-tools-${{ runner.os }}-${{ hashFiles('skills/port-any-game/scripts/toolchain.lock.json') }}
       - name: Upload verify reports
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: verify-${{ matrix.os }}
-          path: ${{ env.PAG_E2E_KEEP }}/**/verify/**
+          path: ${{ env.PAG_KEEP_DIR }}/**/verify/**
           if-no-files-found: ignore

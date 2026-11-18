@@ -3,14 +3,22 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { CASES, cleanup, keepPort, skipReason } from './e2e/run.mjs';
+import { CASES, cleanup, keepPort, skipExit, skipReason } from './e2e/run.mjs';
 
 const tmp = mkdtempSync(path.join(tmpdir(), 'pag-ci-'));
 after(() => { rmSync(tmp, { recursive: true, force: true, maxRetries: 5 }); cleanup(); });
 
 test('PAG_E2E=0 skips browser e2e; anything else defers to the browser check', () => {
   assert.match(skipReason({ PAG_E2E: '0' }), /PAG_E2E=0/);
-  assert.notEqual(skipReason({ PAG_E2E: '1' }), 'PAG_E2E=0; browser e2e skipped');
+  assert.doesNotMatch(String(skipReason({ PAG_E2E: '1' })), /PAG_E2E=0/);
+});
+
+test('PAG_E2E_REQUIRE_BROWSER=1 turns a missing browser into a failure, only then', () => {
+  const why = 'no Chrome/Edge found';
+  assert.equal(skipExit(why, {}), 0);
+  assert.equal(skipExit(why, { PAG_E2E_REQUIRE_BROWSER: '1' }), 1);
+  assert.equal(skipExit(false, { PAG_E2E_REQUIRE_BROWSER: '1' }), 0);
+  assert.equal(skipExit('PAG_E2E=0; browser e2e skipped', { PAG_E2E_REQUIRE_BROWSER: '1' }), 0);
 });
 
 test("the 'all' target holds every lane's cases", () => {
@@ -42,10 +50,15 @@ test('ci.yml has the agreed shape', () => {
   assert.match(y, /node-version: 22/);
   assert.match(y, /timeout-minutes: \d+/);
   assert.doesNotMatch(y, /secrets\./);
-  for (const m of y.matchAll(/uses: (\S+)/g)) assert.match(m[1], /^actions\/(checkout|setup-node|cache|upload-artifact)@v4$/, m[1]);
+  for (const m of y.matchAll(/uses: (\S+)/g)) assert.match(m[1], /^actions\/(checkout|setup-node|cache\/restore|cache\/save|upload-artifact)@v4$/, m[1]);
   const order = ['npm test', 'node scripts/validate.mjs', 'gen-wrappers.mjs --check', 'setup ruffle --yes', 'setup jsdos --yes', 'npm run e2e', 'upload-artifact'].map((s) => y.indexOf(s));
   assert.ok(order.every((n, i) => n > 0 && (i === 0 || n > order[i - 1])), `step order ${order}`);
   assert.match(y, /PAG_E2E: '0'/);
+  assert.match(y, /PAG_E2E_REQUIRE_BROWSER: '1'/);
+  assert.match(y, /actions\/cache\/restore@v4/);
+  assert.match(y, /actions\/cache\/save@v4/);
+  assert.match(y, /if: always\(\)/);
+  assert.doesNotMatch(y, /^ {4}env:\n(?: {6}.*\n)*? {6}PAG_E2E_KEEP/m, 'PAG_E2E_KEEP is step-level only');
   assert.match(y, /if: failure\(\)/);
   assert.match(y, /toolchain\.lock\.json/);
 });

