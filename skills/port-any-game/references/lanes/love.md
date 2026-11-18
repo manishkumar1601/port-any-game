@@ -86,3 +86,5 @@ LÖVE saves (`love.filesystem`) live in the browser's storage for the build's ad
 folder. love.js writes them to storage only when the page closes; the build also writes them every 30 seconds, when
 the tab is hidden and when verify asks (`save` says "lane saveNow ran"). A browser that is killed rather than closed
 can lose the last 30 seconds of saves. Clearing the site's data deletes the saves.
+"lane saveNow ran" means the write to storage has started: saveNow returns without waiting, and write errors are
+not reported.

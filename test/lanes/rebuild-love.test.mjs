@@ -64,6 +64,10 @@ test('loveVerdict reads t.version and native code', () => {
   assert.equal(v(c('11.9')).verdict, 'HARD');
   assert.deepEqual([v(null).version, v(null).verdict], [null, 'HARD']);
   assert.equal(v('function love.conf(t)\n  -- t.version = "11.4"\nend').version, null, 'a commented-out line is no version');
+  const decoy = v('game = {}\ngame.version = "1.2"\nfunction love.conf(t)\n  t.version = "11.4"\nend\n');
+  assert.deepEqual([decoy.version, decoy.verdict], ['11.4', 'GO'], "the game's own version field is not LÖVE's");
+  assert.equal(v('function love.conf(c)\n  c.version = "11.3"\nend\n').version, '11.3', 'the love.conf parameter name');
+  assert.equal(v('love.conf = function( cfg )\n  cfg.version = "11.2"\nend\n').version, '11.2');
   assert.equal(v(c('11.4'), '', ['main.lua', 'lib/x.dll']).verdict, 'NO');
   assert.match(v(c('11.4'), '', ['main.lua', 'lib/x.dll']).why, /lib\/x\.dll/);
   assert.equal(v(c('11.4'), '', ['main.lua', 'luasteam.so']).verdict, 'NO');

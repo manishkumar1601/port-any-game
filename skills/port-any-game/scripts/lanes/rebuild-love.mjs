@@ -28,7 +28,9 @@ export function loveContainer(buf) {
 // Spike g Q5: love.js runs LÖVE 11.4, whose compatibility list is 11.0-11.4. No native code exists on the web.
 export function loveVerdict({ conf, lua, names }) {
   const code = (conf ?? '').replace(/--\[(=*)\[[\s\S]*?\]\1\]/g, '').replace(/--.*/g, '');
-  const version = /\b[A-Za-z_]\w*\.version\s*=\s*["'](\d+\.\d+(?:\.\d+)?)["']/.exec(code)?.[1] ?? null;
+  // The field of love.conf's parameter (`function love.conf(t)`), not a game's own `game.version`.
+  const p = /\blove\.conf\s*(?:=\s*function\s*)?\(\s*([A-Za-z_]\w*)/.exec(code)?.[1] ?? 't';
+  const version = new RegExp(`\\b${p}\\.version\\s*=\\s*["'](\\d+\\.\\d+(?:\\.\\d+)?)["']`).exec(code)?.[1] ?? null;
   const out = (verdict, why) => ({ version, verdict, why });
   const native = names.find((n) => /\.(dll|so|dylib)$/i.test(n));
   if (native) return out('NO', `the game zip carries native code (${native}); the browser cannot load it`);

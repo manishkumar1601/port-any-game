@@ -107,10 +107,11 @@ covered by it; they still launch Chrome and need no runtime tools.
 
 - **Per-run isolation.** `PAG_CACHE` and `PAG_HOME` point at a fresh temp dir; your real cache is never touched. Each case
   gets its own port dir.
-- **Shared tool cache.** Runtime tools (Ruffle, js-dos, Playwright) install once into `<os.tmpdir()>/pag-e2e-tools` and
-  are reused by every e2e run on the machine. Pre-seed it by hand with `PAG_CACHE=<that dir> node
-  skills/port-any-game/scripts/pag.mjs setup ruffle --yes` (also `jsdos`, `playwright`). `pag setup` honours `PAG_CACHE`
-  and otherwise uses `~/.port-any-game`. Deleting the folder just forces a re-download.
+- **Shared tool cache.** Runtime tools (Ruffle, js-dos, EasyRPG, love.js, Playwright) install once into
+  `<os.tmpdir()>/pag-e2e-tools` and are reused by every e2e run on the machine. Pre-seed it by hand with
+  `PAG_CACHE=<that dir> node skills/port-any-game/scripts/pag.mjs setup ruffle --yes` (also `jsdos`, `easyrpg`, `love`,
+  `playwright`). `pag setup` honours `PAG_CACHE` and otherwise uses `~/.port-any-game`. Deleting the folder just forces
+  a re-download.
 - **Network failures skip, nothing else does.** A fetch/DNS/timeout error skips the case with a message; a sha256
   mismatch, bad lock entry or extract bug fails loudly.
 - **Runners.** `cdp` (default) drives Chrome/Edge directly and needs Node 22. `playwright` needs Playwright in the tool

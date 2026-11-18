@@ -56,7 +56,7 @@ The cache directory is `$PAG_CACHE` if set, else `~/.port-any-game`. It holds do
 
 A lane is a conversion method. Each module in `scripts/lanes/` is a descriptor: `id`, `rung`, `available`, `milestone`, `dataModes`, `acks`, `odds`, `detect(survey)`, and for available lanes `build(portDir)`, `shell(port)` (defaults for `shell.json`) and a runtime description. The registry [lanes/index.mjs](../skills/port-any-game/scripts/lanes/index.mjs) collects them and `rankLanes()` orders the ones that apply: GO before HARD, then lower rung, then `known-port` first.
 
-Four lanes are available in M1:
+Six lanes are available: four from M1 and two from M2 (`rt-easyrpg`, `rebuild-love`):
 
 | Lane | Rung | Data mode | What `build` does |
 |---|---|---|---|
