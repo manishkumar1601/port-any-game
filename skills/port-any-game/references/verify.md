@@ -44,6 +44,7 @@ Always look at the screenshots before you tell the user it works.
 | `errors` | no page errors; console errors warn |
 | `requests` | every request succeeds (no 404s) |
 | `privacy` (BYO only) | no request with a body, no cross-origin request, no popup |
+| `csp` (info) | not a test: the lane relaxed the Content-Security-Policy for the game's own code (web-extract: `eval` and inline scripts). Mention it to the user; it never changes the exit code |
 
 ## Known failures and fixes
 

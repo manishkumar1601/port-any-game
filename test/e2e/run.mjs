@@ -97,6 +97,8 @@ async function passes(variant) {
   const r = await once(variant);
   assert.equal(r.report.status, 'pass', failing(r.report));
   assert.equal(r.built.verdict, 'GO');
+  // R61: the fixture needs an inline script and eval; the relaxation is reported, not warned.
+  assert.equal(r.report.checks.find((c) => c.name === 'csp')?.status, 'info', failing(r.report));
 }
 
 // Review Focus 3: the mixed-case reference is served through caseFallback, so no request fails.

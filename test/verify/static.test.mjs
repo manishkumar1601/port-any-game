@@ -43,6 +43,15 @@ test('static: a bundled-public build fails unless the port allows public data (s
   assert.equal(status(await staticChecks(byo.distDir, byo.shell, byo.manifest, byo.port), 'public'), undefined, 'only public builds are gated');
 });
 
+test('static: a lane CSP relaxation is reported as info, never warn (R61)', async () => {
+  const p = await packed({ mode: 'bundled' });
+  assert.equal(status(await staticChecks(p.distDir, p.shell, p.manifest, p.port), 'csp'), undefined);
+  const shell = { ...p.shell, csp: { 'script-src': ["'unsafe-eval'", "'unsafe-inline'"] } };
+  const c = (await staticChecks(p.distDir, shell, p.manifest, p.port)).find((x) => x.name === 'csp');
+  assert.equal(c?.status, 'info');
+  assert.match(c.detail, /script-src.*'unsafe-eval' 'unsafe-inline'/);
+});
+
 test('probe: headers, Range 206 and auth 401/200 (spec §9 step 2)', async () => {
   const { distDir, shell } = await packed({ mode: 'byo' });
   const srv = await startServer({ root: distDir, log: () => {} });

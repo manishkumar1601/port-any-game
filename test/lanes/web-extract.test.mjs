@@ -318,6 +318,8 @@ test('shell() carries the R36 values', () => {
   const s = lane.shell({});
   assert.equal(s.serve.caseFallback, true);
   assert.deepEqual(s.verify, { target_fps: 30, inputs: ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'], audio_on_title: false, budget_ready_s: 30 });
+  // R61: RPG Maker MV/MZ, Twine and many plugins need eval and inline scripts.
+  assert.deepEqual(s.csp, { 'script-src': ["'unsafe-eval'", "'unsafe-inline'"] });
 });
 
 const skip = skipReason();

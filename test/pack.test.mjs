@@ -258,6 +258,21 @@ test('headersFor adds COOP/COEP only when needs_coi', () => {
   assert.equal(headersFor({ requires: { threads: true } }), plain, 'only needs_coi decides');
 });
 
+test('a lane csp relaxation is merged into the CSP and recorded in shell.json (R61)', async () => {
+  const csp = { 'script-src': ["'unsafe-eval'", "'unsafe-inline'", "'self'"] };
+  const rules = Object.fromEntries(parseHeadersFile(headersFor({ csp })).map((r) => [r.pattern, r.headers]));
+  assert.equal(rules['/*']['Content-Security-Policy'], "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' 'unsafe-inline'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'");
+  assert.throws(() => headersFor({ csp: { 'frame-src': ['*'] } }), /frame-src/, 'only directives the base policy has');
+  assert.throws(() => headersFor({ csp: { 'script-src': ['https://evil.example'] } }), /evil/, 'keywords only, never a host');
+
+  const { dir } = makePort();
+  const { distDir, shell } = await pack(dir, opts({ laneModule: lane({ shell: () => ({ csp }) }) }));
+  assert.deepEqual(shell.csp, csp);
+  assert.match(readFileSync(path.join(distDir, '_headers'), 'utf8'), /script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' 'unsafe-inline';/);
+  const plain = await pack(makePort().dir, opts());
+  assert.equal('csp' in plain.shell, false, 'no relaxation unless the lane declares one');
+});
+
 test('X-Robots-Tag is for private builds only (none on bundled-public)', async () => {
   for (const mode of ['byo', 'bundled']) assert.match(headersFor({ needs_coi: false, data: { mode } }), /X-Robots-Tag: noindex, nofollow/, mode);
   const pub = headersFor({ needs_coi: false, data: { mode: 'bundled-public' } });

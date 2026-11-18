@@ -50,6 +50,8 @@ export async function staticChecks(dist, shell, manifest, port) {
   const hp = !headers ? 'no _headers file' : /credentialless/i.test(headers) ? '_headers uses credentialless (Safari lacks it)'
     : shell.needs_coi && !coi ? 'needs_coi is true but _headers lacks COOP same-origin + COEP require-corp' : null;
   add('headers', hp ? 'fail' : 'pass', hp ?? '_headers present');
+  // R61: info, not warn, so every port of such a lane does not exit 2.
+  if (shell.csp) add('csp', 'info', `the lane relaxes the Content-Security-Policy for the game's own code: ${Object.entries(shell.csp).map(([k, v]) => `${k} += ${v.join(' ')}`).join('; ')}`);
   const lic = files.filter((e) => e.rel.startsWith('LICENSES/'));
   add('licenses', lic.length ? 'pass' : 'fail', lic.length ? lic.map((e) => e.rel.slice(9)).join(', ') : 'no notices in LICENSES/');
   return out;

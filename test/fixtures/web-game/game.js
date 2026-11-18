@@ -1,7 +1,11 @@
-// web-extract fixture game (our own code, MIT): external script only, no inline script and no eval (shell CSP).
+// web-extract fixture game (our own code, MIT). Like RPG Maker MV/MZ and Twine it needs an inline script (index.html sets
+// FIXTURE_STEP) and eval/new Function; a strict CSP stops it before the first frame (R61).
+if (typeof window.FIXTURE_STEP !== 'number') throw new Error('inline script did not run');
+const damage = new Function('a', 'b', 'return a * b'); // RPG Maker MV evaluates damage formulas like this
 const W = 640;
 const H = 480;
-const STEP = { ArrowLeft: [-16, 0], ArrowRight: [16, 0], ArrowUp: [0, -16], ArrowDown: [0, 16] };
+const S = damage(window.FIXTURE_STEP, eval('1'));
+const STEP = { ArrowLeft: [-S, 0], ArrowRight: [S, 0], ArrowUp: [0, -S], ArrowDown: [0, S] };
 const canvas = document.getElementById('c');
 const g = canvas.getContext('2d');
 let x = 100;

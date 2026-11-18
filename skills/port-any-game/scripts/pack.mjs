@@ -67,6 +67,20 @@ export function readPort(dir) {
   catch (e) { throw new UsageError(`${dir} is not a port folder (no readable port.json: ${e.code ?? e.message})`); }
 }
 
+// R61 (note 05 §9a): a lane may add CSP keywords to a directive the base policy has (shell.json `csp`, e.g. web-extract's
+// 'unsafe-eval' 'unsafe-inline' for the game's own code); verify reports it. Keywords only, never a host or scheme.
+export function cspFor(extra = {}) {
+  const dirs = new Map(CSP.split('; ').map((d) => { const [k, ...v] = d.split(' '); return [k, v]; }));
+  for (const [k, add] of Object.entries(extra)) {
+    if (!dirs.has(k)) throw new Error(`lane csp: unknown directive '${k}'`);
+    for (const s of add) {
+      if (!/^'[a-z-]+'$/.test(s)) throw new Error(`lane csp: '${s}' is not a CSP keyword`);
+      if (!dirs.get(k).includes(s)) dirs.get(k).push(s);
+    }
+  }
+  return [...dirs].map(([k, v]) => [k, ...v].join(' ')).join('; ');
+}
+
 // The spec §8 / note 05 §9a block. COOP + COEP only when needs_coi; never credentialless.
 // X-Robots-Tag is for private builds, so a bundled-public build leaves it out (spec §8).
 export function headersFor(shell) {
@@ -74,7 +88,7 @@ export function headersFor(shell) {
     '/*',
     ...(shell.needs_coi ? ['  Cross-Origin-Opener-Policy: same-origin', '  Cross-Origin-Embedder-Policy: require-corp'] : []),
     '  Cross-Origin-Resource-Policy: same-origin',
-    `  Content-Security-Policy: ${CSP}`,
+    `  Content-Security-Policy: ${cspFor(shell.csp)}`,
     '  X-Content-Type-Options: nosniff',
     '  Referrer-Policy: no-referrer',
     ...(shell.data?.mode === 'bundled-public' ? [] : ['  X-Robots-Tag: noindex, nofollow']),
@@ -101,6 +115,7 @@ function shellJson(port, lane, mode, runtimeDir, portDir) {
     video: merged('video'),
     ...(c.serve ? { serve: c.serve } : {}),
     ...(c.lane_config ? { lane_config: c.lane_config } : {}),
+    ...(c.csp ? { csp: c.csp } : {}),
     verify: merged('verify'),
   };
 }

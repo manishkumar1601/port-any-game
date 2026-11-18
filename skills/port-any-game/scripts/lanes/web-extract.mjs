@@ -151,6 +151,9 @@ export default {
   },
   shell: () => ({
     serve: { caseFallback: true },
+    // R61: RPG Maker MV/MZ (damage formulas, PixiJS shaders), Twine (inline story engine) and many plugins need these.
+    // The build is the user's own game code; verify reports the relaxation.
+    csp: { 'script-src': ["'unsafe-eval'", "'unsafe-inline'"] },
     verify: { target_fps: 30, inputs: ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'], audio_on_title: false, budget_ready_s: 30 },
   }),
 };
