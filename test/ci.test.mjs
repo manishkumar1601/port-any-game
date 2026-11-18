@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { CASES, cleanup, keepPort, parseE2eArgs, skipExit, skipReason } from './e2e/run.mjs';
+import { CASES, cleanup, ghError, keepPort, parseE2eArgs, skipExit, skipReason } from './e2e/run.mjs';
 
 const tmp = mkdtempSync(path.join(tmpdir(), 'pag-ci-'));
 after(() => { rmSync(tmp, { recursive: true, force: true, maxRetries: 5 }); cleanup(); });
@@ -34,6 +34,20 @@ test('e2e runner options: --runner cdp|playwright and --headed', () => {
   assert.throws(() => parseE2eArgs(['web-extract', '--runner', 'firefox']), /runner/);
   assert.throws(() => parseE2eArgs(['nope']), /usage/);
   assert.match(String(skipReason({}, 'playwright')), /Playwright is not installed|^false$/);
+});
+
+test('e2e ghError: a multi-line failure is one annotation line that keeps its second line', () => {
+  const write = process.stdout.write;
+  let out = '';
+  process.stdout.write = (s) => { out += s; return true; };
+  const prev = process.env.GITHUB_ACTIONS;
+  process.env.GITHUB_ACTIONS = 'true';
+  try { ghError('web-extract case', 'verify failed\n  checks: [{"name":"fps","status":"fail"}]'); } finally {
+    process.stdout.write = write;
+    if (prev === undefined) delete process.env.GITHUB_ACTIONS; else process.env.GITHUB_ACTIONS = prev;
+  }
+  assert.equal(out.split('\n').length, 2, out);
+  assert.match(out, /^::error title=web-extract case::verify failed checks: \[\{"name":"fps"/);
 });
 
 test('PAG_E2E_KEEP copies the port with its verify/ report; unset keeps nothing', () => {

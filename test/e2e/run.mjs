@@ -292,7 +292,8 @@ export function parseE2eArgs(argv) {
 }
 
 // GitHub Actions: an ::error annotation per failed case, so a red run names it without the job log.
-const ghError = (title, msg) => { if (process.env.GITHUB_ACTIONS === 'true') process.stdout.write(annotation({ name: title, message: String(msg).split('\n')[0] })); };
+// The whole message on one line (whitespace runs collapsed), capped at 1000 chars: failed verify checks embed JSON.
+export const ghError = (title, msg) => { if (process.env.GITHUB_ACTIONS === 'true') process.stdout.write(annotation({ name: title, message: String(msg).replace(/\s+/g, ' ').trim().slice(0, 1000) })); };
 async function main(argv) {
   let a;
   try { a = parseE2eArgs(argv); } catch (e) { console.error(e.message); return 2; }
@@ -304,13 +305,13 @@ async function main(argv) {
   let failed = 0;
   for (const c of cases) {
     try { await c.run(); console.log(`ok   ${c.name}`); } catch (e) {
-      if (e?.skip) { console.log(`SKIP ${c.name}: ${e.message}`); continue; } failed++; console.log(`FAIL ${c.name}\n${e.stack ?? e}`); }
+      if (e?.skip) { console.log(`SKIP ${c.name}: ${e.message}`); continue; } failed++; console.log(`FAIL ${c.name}\n${e.stack ?? e}`); ghError(c.name, e?.message ?? e); }
   }
   return failed ? 1 : 0;
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   let code = 1;
-  try { code = await main(process.argv.slice(2)); } finally { cleanup(); }
+  try { code = await main(process.argv.slice(2)); } catch (e) { console.error(e?.stack ?? e); ghError('e2e', e?.message ?? e); } finally { cleanup(); }
   process.exit(code);
 }
