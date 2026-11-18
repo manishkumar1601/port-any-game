@@ -3,15 +3,19 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs
 import path from 'node:path';
 import { loadCatalog } from '../catalog.mjs';
 
+const guess = (m) => m.needs_confirm === true || m.tier === 'engine' || m.tier === 'title';
+
 export default {
   id: 'known-port', rung: 0, available: true, milestone: 'M1', dataModes: ['byo'],
   acks: ['ACK_PRIVATE_USE_ONLY'], external: true, odds: '70-95%',
   checklist: ['Confirm the catalog match with the user', 'Pick a port and read its licence', 'Self-host the port build in the shared shell or point to the public BYO site', "Import the user's own game files and verify"],
+  // I8: only a store id or a signature file names the game. An engine or title match is a guess (any Build-engine .grp
+  // is not Duke3D), so it is HARD and must not outrank a lane that works.
   detect(s) {
     const m = s.catalog_matches ?? [];
-    const strong = m.find((x) => x.tier !== 'title');
-    if (strong) return { verdict: 'GO', why: `catalog match ${strong.game_id} (${strong.tier})` };
-    if (m.length) return { verdict: 'HARD', why: `title-only catalog match ${m[0].game_id}; confirm with the user` };
+    const sure = m.find((x) => !guess(x));
+    if (sure) return { verdict: 'GO', why: `catalog match ${sure.game_id} (${sure.tier})` };
+    if (m.length) return { verdict: 'HARD', why: `${m[0].tier}-only catalog match ${m[0].game_id}; confirm with the user` };
     return { verdict: 'NO', why: 'no catalog match' };
   },
   // opts.catalog overrides the shipped catalog (tests).
@@ -24,7 +28,8 @@ export default {
     const hidden = all.length - ports.length;
     const data_files = [...new Set(ports.flatMap((p) => p.data_files ?? []))];
     const lines = [];
-    if ((ports.length || hidden) && matches.every((m) => m.tier === 'title')) lines.push('Please confirm this is your game: the match is by title only.', '');
+    const unsure = matches.filter(guess).map((m) => m.game_id);
+    if ((ports.length || hidden) && unsure.length) lines.push(`Please confirm this is your game: ${unsure.join(', ')} matched by its engine or title only.`, '');
     for (const x of found) if (!x.game) lines.push(`The survey guessed ${x.m.game_id}, but the catalog has no entry for it.`);
     if (!all.length && !hidden && found.every((x) => x.game)) lines.push('No known web port was found for this game in the catalog.');
     for (const p of ports) {

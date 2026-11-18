@@ -12,8 +12,8 @@ Nothing is built: you point the user to the existing port and tell them which of
 - The user's own game files. The catalog never contains game data or download links for game data.
 
 ## Steps
-1. If the survey said "Possible existing port ... confirm the game title" (a title-only match), ask the user whether
-   that is their game before anything else.
+1. If the survey said "Possible existing port ... confirm the game title" (an engine-only or title-only match), ask the
+   user whether that is their game before anything else. Such a match is HARD and never outranks a lane that works.
 2. `node <skill-dir>/scripts/pag.mjs build "<port>"` prints a `message`, and the same list as JSON in `ports`:
    - each port's name, address, licence and legal risk;
    - which of the user's own files to pick ("Pick these of your own files: ...");
@@ -33,7 +33,7 @@ expected, not a failure.
 
 | What you see | Cause | Fix |
 |---|---|---|
-| "Please confirm this is your game: the match is by title only." | the survey only matched the folder or game title | Ask the user. If it is not their game, pick another lane from the survey. |
+| "Please confirm this is your game: ... matched by its engine or title only." | the survey only matched the engine (for example any Build-engine `.grp`, any Doom WAD) or the folder or game title | Ask the user. If it is not their game, pick another lane from the survey. |
 | "No known web port was found for this game in the catalog." | the survey's match has no ports listed | Use the next lane the survey listed, or stop honestly. |
 | "The survey guessed X, but the catalog has no entry for it." | catalog and survey disagree | Report it; use the next lane the survey listed. |
 | "N high-risk port(s) hidden" | only high-risk ports exist | Explain the risk; show them only if the user asks (`--include-high-risk`). |

@@ -36,8 +36,8 @@ export function decide(partial) {
     reasons.push(`Ambiguous engine: ${eng[0].id} vs ${eng[1].id}; run the deep-mode oracles (scummvm --detect, diec) to decide.`);
   }
 
-  for (const m of (partial.catalog_matches ?? []).filter((x) => x.tier === 'title')) {
-    reasons.push(`Possible existing port: ${m.ports?.[0]?.name ?? m.game_id} — confirm the game title.`);
+  for (const m of (partial.catalog_matches ?? []).filter((x) => x.needs_confirm || x.tier === 'title' || x.tier === 'engine')) { // I8
+    reasons.push(`Possible existing port: ${m.ports?.[0]?.name ?? m.game_id} (${m.game_id}, matched by ${m.tier} only) — confirm the game title.`);
   }
   for (const p of warns) reasons.push(`Warning: ${p.id} (${p.class}) found; acknowledgement required. Packed binaries are never unpacked automatically.`);
   if (primary) for (const a of LANES[primary.lane].acks) acks.add(a);

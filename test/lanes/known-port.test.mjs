@@ -30,13 +30,33 @@ test('descriptor: rung 0, byo, private-use ack only', () => {
   assert.equal(lane.external, true);
 });
 
-test('GO on store match', () => {
+test('GO on store or signature match', () => {
   assert.equal(lane.detect({ catalog_matches: [{ game_id: 'caesar3', tier: 'store' }] }).verdict, 'GO');
+  assert.equal(lane.detect({ catalog_matches: [{ game_id: 'diablo', tier: 'signature' }] }).verdict, 'GO');
   assert.equal(lane.detect({}).verdict, 'NO');
 });
 
-test('HARD on title-only match', () => {
-  assert.equal(lane.detect({ catalog_matches: [{ game_id: 'caesar3', tier: 'title' }] }).verdict, 'HARD');
+// I8: an engine or title match is a guess (Shadow Warrior's .grp is not Duke3D's); it needs the user's confirmation.
+test('HARD on engine-only or title-only match, with a confirm reason', () => {
+  for (const tier of ['engine', 'title']) {
+    const d = lane.detect({ catalog_matches: [{ game_id: 'duke3d', tier, needs_confirm: true }] });
+    assert.equal(d.verdict, 'HARD', tier);
+    assert.match(d.why, /confirm/);
+  }
+});
+
+test('a .grp-only folder with a DOS exe gets dos-jsdos as its primary lane, not a Duke3D port', async () => {
+  const { survey } = await import('../../skills/port-any-game/scripts/survey/survey.mjs');
+  const { makeMZ } = await import('../fixtures/make-pe.mjs');
+  const dir = path.join(base, `grp${++n}`);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(path.join(dir, 'SW.GRP'), Buffer.concat([Buffer.from('KenSilverman'), Buffer.alloc(64)]));
+  writeFileSync(path.join(dir, 'SW.EXE'), makeMZ(Buffer.alloc(4096)));
+  const s = await survey(dir);
+  assert.ok(s.catalog_matches.some((m) => m.game_id === 'duke3d' && m.tier === 'engine'), JSON.stringify(s.catalog_matches));
+  assert.equal(s.verdict.primary_lane, 'dos-jsdos', JSON.stringify(s.lanes));
+  assert.equal(s.lanes.find((l) => l.lane === 'known-port').verdict, 'HARD');
+  assert.match(s.verdict.reasons.join('\n'), /Possible existing port: .*\(duke3d, matched by engine only\) — confirm the game title/);
 });
 
 test('build lists data files and license, writes no dist', async () => {
@@ -75,6 +95,13 @@ test('title-only message asks for confirmation first', async () => {
   const r = await lane.build(fakePort([{ game_id: 'caesar3', tier: 'title' }]));
   assert.match(r.message, /^Please confirm this is your game/);
   assert.ok(r.ports.length === 1);
+});
+
+test('the confirm line prints whenever any listed match needs confirmation', async () => {
+  const mixed = await lane.build(fakePort([{ game_id: 'caesar3', tier: 'store', needs_confirm: false }, { game_id: 'duke3d', tier: 'engine', needs_confirm: true }]));
+  assert.match(mixed.message, /^Please confirm this is your game: duke3d matched by its engine or title only/);
+  const sure = await lane.build(fakePort([{ game_id: 'caesar3', tier: 'store', needs_confirm: false }]));
+  assert.ok(!/confirm/.test(sure.message), sure.message);
 });
 
 test('no matches gives a clear message', async () => {
